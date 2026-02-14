@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vocab Practice Engine</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#ff1a1a" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Excel Library -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+
+<body>
+
+<!-- ================= HEADER ================= -->
+<header>
+  <h1>📘 Vocab Practice Engine</h1>
+
+  <!-- Theme Toggle -->
+  <button id="themeToggleBtn" class="theme-toggle">
+    🌙 Dark Mode
+  </button>
+</header>
+
+<!-- ================= NAVIGATION ================= -->
+<nav>
+  <button onclick="showSection('upload')">Upload</button>
+  <button onclick="showSection('practice')">Practice</button>
+  <button onclick="showSection('exam')">Exam</button>
+  <button onclick="showSection('analytics')">Analytics</button>
+</nav>
+
+<!-- ================= UPLOAD ================= -->
+<section id="upload" class="section active">
+  <h2>Upload Excel</h2>
+
+  <div class="file-upload-wrapper">
+    <input type="file" id="excelFile" accept=".xlsx,.xls" hidden />
+
+    <button type="button" id="customFileBtn">
+      📁 Select Excel File
+    </button>
+
+    <span id="fileName">No file selected</span>
+
+    <button id="uploadBtn">
+      🚀 Upload & Save
+    </button>
+  </div>
+
+  <div id="uploadStatus"></div>
+</section>
+
+<!-- ================= PRACTICE ================= -->
+<section id="practice" class="section">
+  <h2>Practice Mode</h2>
+
+  <label>
+    Questions:
+    <input type="number" id="practiceCountInput" value="20" min="5" />
+  </label>
+
+  <button id="startPractice">Start Practice</button>
+  <button id="startWeakMode">Weak Mode</button>
+
+  <div id="practiceContainer"></div>
+</section>
+
+<!-- ================= EXAM ================= -->
+<section id="exam" class="section">
+  <h2>Exam Mode</h2>
+
+  <label>
+    Timer per Question (seconds):
+    <input type="number" id="examTimerInput" value="30" min="5" />
+  </label>
+
+  <button id="startExam">Start Exam</button>
+
+  <div id="examContainer"></div>
+</section>
+
+<!-- ================= ANALYTICS ================= -->
+<section id="analytics" class="section">
+  <h2>📈 Session Analytics</h2>
+
+  <div id="analyticsContainer"></div>
+
+  <div style="margin-top:30px; text-align:center;">
+    <button id="masterDeleteBtn" class="danger-btn">
+      🔥 Master Delete All Data
+    </button>
+  </div>
+</section>
+
+<!-- ================= DEBUG ================= -->
+<button id="debugToggle" class="debug-btn">
+  Debug: OFF
+</button>
+
+<div id="debugPanel" class="debug-panel">
+  <strong>Debug Console</strong>
+  <div id="debugLogs"></div>
+</div>
+
+<!-- ================= FOCUS MODE ================= -->
+<div id="focusMode">
+  <div id="focusContent"></div>
+</div>
+
+<!-- ================= MAIN SCRIPT ================= -->
+<script src="app.js"></script>
+
+<!-- ================= SERVICE WORKER ================= -->
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("service-worker.js")
+      .then(() => console.log("Service Worker Registered"))
+      .catch(err => console.log("SW registration failed:", err));
+  });
+}
+</script>
+
+</body>
+</html>
