@@ -1,4 +1,4 @@
-const CACHE_NAME = "vocab-app-v73;
+const CACHE_NAME = "vocab-app-v74.0;
 const STATIC_ASSETS = [
   "./",
   "./index.html",
@@ -53,6 +53,7 @@ self.addEventListener("fetch", event => {
     })
   );
 });
+
 
 
 
