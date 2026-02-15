@@ -1,6 +1,9 @@
 
 document.addEventListener("DOMContentLoaded", function () {
 
+  function logDebug(message) {
+    console.log("[DEBUG]:", message);
+  }
 
 
   /***********************
@@ -40,7 +43,7 @@ function initDB() {
   document.getElementById("startWeakMode").disabled = true;
   document.getElementById("uploadBtn").disabled = true;
 
-  const request = indexedDB.open("VocabDB", 1);
+const request = indexedDB.open("VocabDB", 2);
 
   request.onerror = function () {
     logDebug("Database failed to open");
@@ -163,37 +166,41 @@ initDB();
 
         let addedCount = 0;
 
-        jsonData.forEach(row => {
-          const wordObject = {
-  word: row.Word ? row.Word.trim() : "",
-  meanings: row.Meaning
-    ? row.Meaning.split(",").map(m => m.trim())
-    : [],
-  wrongCount: 0,
-  correctCount: 0,
-  totalAttempts: 0,
-  lastAsked: null,
-  reviewInterval: 1,
-  nextReviewDate: Date.now(),
-  batchId: batchId,
-  createdAt: new Date()
-};
+const transaction = db.transaction("words", "readwrite");
+const store = transaction.objectStore("words");
 
+jsonData.forEach(row => {
 
-          if (wordObject.word !== "") {
-            addWordToDB(wordObject);
-            addedCount++;
-          }
-        });
+  const wordObject = {
+    word: row.Word ? row.Word.trim() : "",
+    meanings: row.Meaning
+      ? row.Meaning.split(",").map(m => m.trim())
+      : [],
+    wrongCount: 0,
+    correctCount: 0,
+    totalAttempts: 0,
+    lastAsked: null,
+    reviewInterval: 1,
+    nextReviewDate: Date.now(),
+    batchId: batchId,
+    createdAt: new Date()
+  };
 
-        logDebug("Excel processed. Words added: " + addedCount);
+  if (wordObject.word !== "") {
+    store.add(wordObject);
+    addedCount++;
+  }
 
-        document.getElementById("uploadStatus").innerText =
-          "Upload successful! Words saved to database.";
-// Auto refresh analytics after upload
-setTimeout(() => {
+});
+
+transaction.oncomplete = function () {
+  logDebug("Excel processed. Words added: " + addedCount);
+
+  document.getElementById("uploadStatus").innerText =
+    "Upload successful! Words saved to database.";
+
   loadSessionAnalytics();
-}, 300);
+};
 
         fileInput.value = "";
 
@@ -1133,6 +1140,5 @@ function updateWordStats(wordId, performanceScore) {
 
 
 });
-
 
 
