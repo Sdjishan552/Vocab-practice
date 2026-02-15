@@ -39,12 +39,18 @@ if (debugToggle) {
   ************************/
 
   window.showSection = function (sectionId) {
-    document.querySelectorAll(".section").forEach(sec => {
-      sec.classList.remove("active");
-    });
 
-    document.getElementById(sectionId).classList.add("active");
-  };
+  document.querySelectorAll(".section").forEach(sec => {
+    sec.classList.remove("active");
+  });
+
+  document.getElementById(sectionId).classList.add("active");
+
+  if (sectionId === "analytics" && db) {
+    loadSessionAnalytics();
+  }
+};
+
 
 
 
@@ -52,57 +58,64 @@ if (debugToggle) {
     INDEXED DB SETUP
   ************************/
 
-  let db;
+ let db;
 
-  function initDB() {
-    const request = indexedDB.open("VocabDB", 1);
+function initDB() {
 
-    request.onerror = function () {
-      logDebug("Database failed to open");
-    };
+  // Disable buttons until DB is ready
+  document.getElementById("startPractice").disabled = true;
+  document.getElementById("startExam").disabled = true;
+  document.getElementById("startWeakMode").disabled = true;
+  document.getElementById("uploadBtn").disabled = true;
 
-    request.onsuccess = function () {
-  db = request.result;
-  logDebug("Database opened successfully");
+  const request = indexedDB.open("VocabDB", 1);
 
-  document.getElementById("startPractice").disabled = false;
-  document.getElementById("startExam").disabled = false;
-  document.getElementById("startWeakMode").disabled = false;
-  document.getElementById("uploadBtn").disabled = false;
-};
+  request.onerror = function () {
+    logDebug("Database failed to open");
+  };
 
+  request.onupgradeneeded = function (event) {
+    db = event.target.result;
 
-document.getElementById("startPractice").disabled = true;
-document.getElementById("startExam").disabled = true;
-document.getElementById("startWeakMode").disabled = true;
-document.getElementById("uploadBtn").disabled = true;
-    request.onupgradeneeded = function (event) {
-      db = event.target.result;
+    // WORDS STORE
+    if (!db.objectStoreNames.contains("words")) {
+      const wordsStore = db.createObjectStore("words", {
+        keyPath: "id",
+        autoIncrement: true
+      });
 
-      // WORDS STORE
-      if (!db.objectStoreNames.contains("words")) {
-        const wordsStore = db.createObjectStore("words", {
-          keyPath: "id",
-          autoIncrement: true
-        });
+      wordsStore.createIndex("word", "word", { unique: false });
+      wordsStore.createIndex("batchId", "batchId", { unique: false });
+    }
 
-        wordsStore.createIndex("word", "word", { unique: false });
-        wordsStore.createIndex("batchId", "batchId", { unique: false });
-      }
+    // SESSIONS STORE
+    if (!db.objectStoreNames.contains("sessions")) {
+      db.createObjectStore("sessions", {
+        keyPath: "id",
+        autoIncrement: true
+      });
+    }
 
-      // SESSIONS STORE
-      if (!db.objectStoreNames.contains("sessions")) {
-        db.createObjectStore("sessions", {
-          keyPath: "id",
-          autoIncrement: true
-        });
-      }
+    logDebug("Database structure created");
+  };
 
-      logDebug("Database structure created");
-    };
-  }
+  request.onsuccess = function () {
 
-  initDB();
+    db = request.result;
+    logDebug("Database opened successfully");
+
+    // Enable buttons now
+    document.getElementById("startPractice").disabled = false;
+    document.getElementById("startExam").disabled = false;
+    document.getElementById("startWeakMode").disabled = false;
+    document.getElementById("uploadBtn").disabled = false;
+
+    // 🔥 Always refresh analytics once DB is ready
+    loadSessionAnalytics();
+  };
+}
+
+initDB();
 
 
 
@@ -205,6 +218,10 @@ document.getElementById("uploadBtn").disabled = true;
 
         document.getElementById("uploadStatus").innerText =
           "Upload successful! Words saved to database.";
+// Auto refresh analytics after upload
+setTimeout(() => {
+  loadSessionAnalytics();
+}, 300);
 
         fileInput.value = "";
 
@@ -741,6 +758,34 @@ function calculateAccuracy(word) {
 
 function loadSessionAnalytics() {
 
+  const container = document.getElementById("analyticsContainer");
+  container.innerHTML = "";
+
+  // ===== TOTAL WORD COUNT =====
+  const wordTransaction = db.transaction("words", "readonly");
+  const wordStore = wordTransaction.objectStore("words");
+  const wordCountRequest = wordStore.count();
+
+  wordCountRequest.onsuccess = function () {
+
+    const totalWords = wordCountRequest.result;
+
+    const countCard = document.createElement("div");
+    countCard.className = "analytics-card";
+    countCard.style.borderTop = "4px solid #4caf50";
+
+    countCard.innerHTML = `
+      <h3>📚 Database Overview</h3>
+      <div class="analytics-row">
+        <span>Total Main Words</span>
+        <span>${totalWords}</span>
+      </div>
+    `;
+
+    container.appendChild(countCard);
+  };
+
+  // ===== LOAD SESSION DATA =====
   const transaction = db.transaction("sessions", "readonly");
   const store = transaction.objectStore("sessions");
   const request = store.getAll();
@@ -748,11 +793,12 @@ function loadSessionAnalytics() {
   request.onsuccess = function () {
 
     const sessions = request.result;
-    const container = document.getElementById("analyticsContainer");
-    container.innerHTML = "";
 
     if (!sessions || sessions.length === 0) {
-      container.innerHTML = "<p>No sessions yet.</p>";
+      const noSession = document.createElement("p");
+      noSession.innerText = "No sessions yet.";
+      noSession.style.marginTop = "20px";
+      container.appendChild(noSession);
       return;
     }
 
@@ -795,14 +841,18 @@ function loadSessionAnalytics() {
       `;
     }
 
-    container.innerHTML = `
-      <div class="analytics-grid">
-        ${createCard("📘 Practice Performance", practiceSessions, "#00c8ff")}
-        ${createCard("📕 Exam Performance", examSessions, "#ff1a1a")}
-      </div>
+    const analyticsGrid = document.createElement("div");
+    analyticsGrid.className = "analytics-grid";
+
+    analyticsGrid.innerHTML = `
+      ${createCard("📘 Practice Performance", practiceSessions, "#00c8ff")}
+      ${createCard("📕 Exam Performance", examSessions, "#ff1a1a")}
     `;
+
+    container.appendChild(analyticsGrid);
   };
 }
+
 
 
 
@@ -1065,4 +1115,5 @@ function updateWordStats(wordId, performanceScore) {
 
 
 });
+
 
