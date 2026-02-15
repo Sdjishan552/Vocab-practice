@@ -15,7 +15,7 @@
   </a>
 </header>
 <div class="book-filter">
-  <label>Filter by Upload Date:</label>
+  <label></label>
   <select id="dateFilter">
     <option value="all">All Words</option>
     <option value="3">Last 3 Days</option>
@@ -23,9 +23,13 @@
     <option value="10">Last 10 Days</option>
     <option value="30">Last 30 Days</option>
   </select>
+   <input type="text" id="searchInput" placeholder="Search word..." class="book-search">
 </div>
 
 <div id="bookContainer" class="book-container"></div>
+</div>
+
+
 
 
 <script>
@@ -49,6 +53,10 @@ request.onsuccess = function () {
 document.getElementById("dateFilter").addEventListener("change", function () {
   loadBook(this.value);
 });
+document.getElementById("searchInput").addEventListener("input", function () {
+  const filterDays = document.getElementById("dateFilter").value;
+  loadBook(filterDays);
+});
 
 function loadBook(filterDays) {
 
@@ -62,6 +70,13 @@ function loadBook(filterDays) {
   req.onsuccess = function () {
 
     let words = req.result;
+    const searchText = document.getElementById("searchInput").value.toLowerCase();
+
+if (searchText.trim() !== "") {
+  words = words.filter(word =>
+    word.word.toLowerCase().includes(searchText)
+  );
+}
 
     if (!words || words.length === 0) {
       container.innerHTML = "<p>No words available.</p>";
