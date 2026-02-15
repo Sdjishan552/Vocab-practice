@@ -1,4 +1,4 @@
-const CACHE_NAME = "vocab-app-v007;
+const CACHE_NAME = "vocab-app-v007";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const STATIC_ASSETS = [
   "./icons/icon-192.png",
   "./icons/icon-512.png"
 ];
+
 
 
 // INSTALL
@@ -54,6 +55,7 @@ self.addEventListener("fetch", event => {
     })
   );
 });
+
 
 
 
