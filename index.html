@@ -120,12 +120,12 @@
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js")
+    navigator.serviceWorker.register("/service-worker.js", { scope: "/" })
       .then(reg => {
-        console.log("Service Worker Registered with scope:", reg.scope);
+        console.log("Service Worker registered. Scope:", reg.scope);
       })
       .catch(err => {
-        console.error("SW registration failed:", err);
+        console.error("Service Worker registration failed:", err);
       });
   });
 }
@@ -135,6 +135,7 @@ if ("serviceWorker" in navigator) {
 
 </body>
 </html>
+
 
 
 
