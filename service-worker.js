@@ -1,11 +1,12 @@
-const CACHE_NAME = "vocab-app-v1";
+const CACHE_NAME = "vocab-app-v7.01";
 const STATIC_ASSETS = [
-  "/",
-  "/index.html",
-  "/style.css",
-  "/app.js",
-  "/manifest.json"
+  "./",
+  "./index.html",
+  "./style.css",
+  "./app.js",
+  "./manifest.json"
 ];
+
 // INSTALL
 self.addEventListener("install", event => {
   event.waitUntil(
@@ -36,29 +37,17 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   event.respondWith(
     caches.match(event.request).then(cached => {
-      if (cached) return cached;
-
-      return fetch(event.request)
-        .then(response => {
-          // Only cache successful responses
-          if (!response || response.status !== 200 || response.type !== "basic") {
+      return (
+        cached ||
+        fetch(event.request).then(response => {
+          return caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, response.clone());
             return response;
-          }
-
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseToCache);
           });
-
-          return response;
+        }).catch(() => {
+          return caches.match("./index.html");
         })
-        .catch(() => {
-          // Important: return root index.html so client-side routing works
-          return caches.match("/index.html");
-        });
+      );
     })
   );
 });
-});
-
-
