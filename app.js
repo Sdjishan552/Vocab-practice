@@ -74,10 +74,25 @@ const request = indexedDB.open("VocabDB", 2);
     logDebug("Database structure created");
   };
 
-  request.onsuccess = function () {
+request.onsuccess = function () {
 
-    db = request.result;
-    logDebug("Database opened successfully");
+  db = request.result;
+
+  // SAFETY CHECK
+  if (!db.objectStoreNames.contains("words") ||
+      !db.objectStoreNames.contains("sessions")) {
+
+    logDebug("Database structure missing. Rebuilding...");
+
+    db.close();
+    indexedDB.deleteDatabase("VocabDB");
+
+    location.reload();
+    return;
+  }
+
+  logDebug("Database opened successfully");
+
 
     // Enable buttons now
     document.getElementById("startPractice").disabled = false;
