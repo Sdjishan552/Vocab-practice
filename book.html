@@ -38,7 +38,7 @@ if (savedTheme === "light") {
 
 let db;
 
-const request = indexedDB.open("VocabDB", 1);
+const request = indexedDB.open("VocabDB", 2);
 
 request.onsuccess = function () {
   db = request.result;
