@@ -6,7 +6,8 @@
   <title>Vocab Practice Engine</title>
 
   <!-- PWA -->
-<link rel="manifest" href="/manifest.json" />  <meta name="theme-color" content="#ff1a1a" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#ff1a1a" />
 
   <!-- Styles -->
   <link rel="stylesheet" href="style.css" />
@@ -21,7 +22,6 @@
 <header>
   <h1>📘 Vocab Practice Engine</h1>
 
-  <!-- Theme Toggle -->
   <button id="themeToggleBtn" class="theme-toggle">
     🌙 Dark Mode
   </button>
@@ -87,7 +87,14 @@
 
 <!-- ================= ANALYTICS ================= -->
 <section id="analytics" class="section">
-  <h2>📈 Session Analytics</h2>
+  <h2>📈 Analytics</h2>
+
+  <!-- Book Mode Button -->
+  <a href="book.html" class="book-mode-card">
+  📖 Open Vocabulary Book
+</a>
+
+
 
   <div id="analyticsContainer"></div>
 
@@ -98,15 +105,10 @@
   </div>
 </section>
 
-<!-- ================= DEBUG ================= -->
-<button id="debugToggle" class="debug-btn">
-  Debug: OFF
-</button>
 
-<div id="debugPanel" class="debug-panel">
-  <strong>Debug Console</strong>
-  <div id="debugLogs"></div>
-</div>
+
+<!-- ================= DEBUG ================= -->
+ 
 
 <!-- ================= FOCUS MODE ================= -->
 <div id="focusMode">
@@ -131,14 +133,5 @@ if ("serviceWorker" in navigator) {
 }
 </script>
 
-
-
 </body>
 </html>
-
-
-
-
-
-
-
