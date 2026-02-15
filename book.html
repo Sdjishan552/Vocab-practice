@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vocabulary Book</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="book-page">
+
+<header class="book-header">
+  <h1>📖 Vocabulary Book</h1>
+  <a href="index.html">
+    <button>← Back to Dashboard</button>
+  </a>
+</header>
+<div class="book-filter">
+  <label>Filter by Upload Date:</label>
+  <select id="dateFilter">
+    <option value="all">All Words</option>
+    <option value="3">Last 3 Days</option>
+    <option value="7">Last 7 Days</option>
+    <option value="10">Last 10 Days</option>
+    <option value="30">Last 30 Days</option>
+  </select>
+</div>
+
+<div id="bookContainer" class="book-container"></div>
+
+
+<script>
+
+// ===== LOAD SAVED THEME =====
+const savedTheme = localStorage.getItem("theme");
+if (savedTheme === "light") {
+  document.body.classList.add("light-mode");
+}
+
+let db;
+
+const request = indexedDB.open("VocabDB", 1);
+
+request.onsuccess = function () {
+  db = request.result;
+  loadBook("all");
+};
+
+// Filter change event
+document.getElementById("dateFilter").addEventListener("change", function () {
+  loadBook(this.value);
+});
+
+function loadBook(filterDays) {
+
+  const container = document.getElementById("bookContainer");
+  container.innerHTML = "";
+
+  const transaction = db.transaction("words", "readonly");
+  const store = transaction.objectStore("words");
+  const req = store.getAll();
+
+  req.onsuccess = function () {
+
+    let words = req.result;
+
+    if (!words || words.length === 0) {
+      container.innerHTML = "<p>No words available.</p>";
+      return;
+    }
+
+    // ===== FILTER LOGIC =====
+    if (filterDays !== "all") {
+
+      const days = parseInt(filterDays);
+      const now = Date.now();
+      const cutoff = now - (days * 24 * 60 * 60 * 1000);
+
+      words = words.filter(word => {
+        return new Date(word.createdAt).getTime() >= cutoff;
+      });
+    }
+
+    if (words.length === 0) {
+      container.innerHTML = "<p>No words found for selected filter.</p>";
+      return;
+    }
+
+    // Sort alphabetically
+    words.sort((a, b) => a.word.localeCompare(b.word));
+
+    let currentLetter = "";
+
+    words.forEach(wordObj => {
+
+      const firstLetter = wordObj.word.charAt(0).toUpperCase();
+
+      if (firstLetter !== currentLetter) {
+        currentLetter = firstLetter;
+
+        const letter = document.createElement("h2");
+        letter.className = "alphabet-title";
+        letter.innerText = currentLetter;
+        container.appendChild(letter);
+      }
+
+      const card = document.createElement("div");
+      card.className = "book-word";
+
+      const meanings = wordObj.meanings
+        .map(m => `<li>${m}</li>`)
+        .join("");
+
+      card.innerHTML = `
+        <h3>${wordObj.word}</h3>
+        <ul>${meanings}</ul>
+      `;
+
+      container.appendChild(card);
+    });
+  };
+}
+
+</script>
+
+
+
+
+</body>
+</html>
