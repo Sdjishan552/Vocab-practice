@@ -1,1095 +1,1064 @@
-/*************************************************
- * DISCIPLINE TRACKER – STABLE & MANUAL START
- *************************************************/
 
-/* ========= NOTIFICATIONS ========= */
-function requestNotificationPermission() {
-  if ("Notification" in window) {
-    if (Notification.permission === "default") {
-      Notification.requestPermission().then(permission => {
-        if (permission === "granted") {
-          console.log("Notification permission granted.");
-        } else {
-          console.log("Notification permission denied.");
-        }
-      });
-    } else if (Notification.permission === "granted") {
-      console.log("Notification permission already granted.");
-    } else {
-      console.log("Notification permission denied.");
-    }
-  } else {
-    console.log("Notifications not supported in this browser.");
+
+  /***********************
+    DEBUG SYSTEM
+  ************************/
+
+  let debugMode = false;
+
+  const debugPanel = document.getElementById("debugPanel");
+  const debugLogs = document.getElementById("debugLogs");
+  const debugToggle = document.getElementById("debugToggle");
+
+  debugToggle.addEventListener("click", () => {
+    debugMode = !debugMode;
+    debugPanel.style.display = debugMode ? "block" : "none";
+    debugToggle.innerText = debugMode ? "Debug: ON" : "Debug: OFF";
+  });
+
+  function logDebug(message) {
+    if (!debugMode) return;
+
+    const logEntry = document.createElement("div");
+    logEntry.innerText = "> " + message;
+    debugLogs.appendChild(logEntry);
+    debugPanel.scrollTop = debugPanel.scrollHeight;
   }
-}
 
-function notify(title, body, tagKey = "default-tag") {
-  if (!("Notification" in window)) return;
-  if (Notification.permission !== "granted") return;
-
-  const options = {
-    body: body,
-    icon: "assets/icon-192.png",
-    badge: "assets/icon-192.png",
-    vibrate: [600, 300, 600, 300, 600], // 3 strong vibration pulses
-    requireInteraction: true,          // stays until dismissed
-    tag: tagKey,
-    renotify: true
+  window.onerror = function (message, source, lineno) {
+    logDebug("ERROR: " + message + " (Line: " + lineno + ")");
   };
 
-  if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.ready.then(registration => {
-      registration.showNotification(title, options);
+
+
+  /***********************
+    SECTION SWITCHING
+  ************************/
+
+  window.showSection = function (sectionId) {
+    document.querySelectorAll(".section").forEach(sec => {
+      sec.classList.remove("active");
     });
-  } else {
-    new Notification(title, options);
-  }
-}
 
-
-
-/* ========= SOUND ALERT ========= */
-/* ========= SOUND ALERT ========= */
-
-let soundPlayedForSlot = null;
-
-// Create reusable base sound
-const baseBeep = new Audio("data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA==");
-baseBeep.preload = "auto";
-
-
-function playAlertSound(slotKey) {
-  if (soundPlayedForSlot === slotKey) return;
-
-  // ✅ OFFLINE SOUND - No internet required!
-  const audio = new Audio("data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA==");
-
-  let count = 0;
-  const playThreeTimes = () => {
-    audio.currentTime = 0;
-    audio.play().catch(() => {});
-    console.log("Playing alert sound for slot: " + slotKey);  // ← debug log
-
-    count++;
-    if (count < 3) {
-      setTimeout(playThreeTimes, 1200); // ~1.2 seconds between beeps
-    } else {
-      soundPlayedForSlot = slotKey;
-    }
+    document.getElementById(sectionId).classList.add("active");
   };
 
-  playThreeTimes();
-}
 
-function minutesToTime(mins) {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  const ampm = h >= 12 ? "PM" : "AM";
-  const hour12 = h % 12 || 12;
-  return `${hour12.toString().padStart(2, "0")}:${m
-    .toString()
-    .padStart(2, "0")} ${ampm}`;
-}
-/* ========= HELPERS ========= */
-function toMinutes(t) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
 
-function nowMinutes() {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes();
-}
+  /***********************
+    INDEXED DB SETUP
+  ************************/
 
-function formatNow() {
-  return new Date().toLocaleString();
-}
+  let db;
 
-function todayKey() {
-  return new Date().toISOString().split("T")[0];
-}
+  function initDB() {
+    const request = indexedDB.open("VocabDB", 1);
 
-/* ========= STORAGE ========= */
-function getLog() {
-  try {
-    const raw = localStorage.getItem(todayKey());
-    if (!raw) return [];
-    return JSON.parse(raw) || [];
-  } catch (err) {
-    console.error("Log corrupted. Resetting.", err);
-    localStorage.removeItem(todayKey());
-    return [];
-  }
-}
+    request.onerror = function () {
+      logDebug("Database failed to open");
+    };
 
+    request.onsuccess = function () {
+  db = request.result;
+  logDebug("Database opened successfully");
 
-function saveLog(log) {
-  localStorage.setItem(todayKey(), JSON.stringify(log));
-}
+  document.getElementById("startPractice").disabled = false;
+  document.getElementById("startExam").disabled = false;
+  document.getElementById("startWeakMode").disabled = false;
+  document.getElementById("uploadBtn").disabled = false;
+};
 
-/* ========= TIMETABLE ========= */
-function getTimetable() {
-  try {
-    const raw = localStorage.getItem("timetable");
-    if (!raw) return [];
 
-    const data = JSON.parse(raw);
+document.getElementById("startPractice").disabled = true;
+document.getElementById("startExam").disabled = true;
+document.getElementById("startWeakMode").disabled = true;
+document.getElementById("uploadBtn").disabled = true;
+    request.onupgradeneeded = function (event) {
+      db = event.target.result;
 
-    if (!Array.isArray(data)) return [];
-
-    return data.filter(e => {
-      if (!e || typeof e.start !== "string" || typeof e.end !== "string" || !e.name) return false;
-
-      // Only allow correct time format like 08:00 or 14:30
-      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-      if (!timeRegex.test(e.start) || !timeRegex.test(e.end)) return false;
-
-      const startMin = toMinutes(e.start);
-      const endMin = toMinutes(e.end);
-      return !isNaN(startMin) && !isNaN(endMin) && startMin < endMin;
-    });
-
-  } catch (err) {
-    console.error("Timetable corrupted. Resetting.", err);
-    localStorage.removeItem("timetable");
-    return [];
-  }
-}
-
-
-/* ========= CURRENT EVENT ========= */
-function getCurrentMainEvent() {
-  const now = nowMinutes();
-  const timetable = getTimetable();   // ✅ Use validated timetable
-
-  return timetable.filter(e => {
-    const start = toMinutes(e.start);
-    const end = toMinutes(e.end);
-    return now >= start && now < end;
-  });
-}
-
-
-
-/* ========= HYDRATION (ONLY AFTER START) ========= */
-// ================= FOCUS MODE SYSTEM =================
-
-let wakeLock = null;
-let focusTimer = null;
-
-async function enableWakeLock() {
-  try {
-    wakeLock = await navigator.wakeLock.request("screen");
-    console.log("🔒 Screen Wake Lock enabled");
-
-    // 🔁 Re-request wake lock if user comes back to app
-    
-
-  } catch (err) {
-    console.log("Wake Lock failed:", err);
-  }
-}
-
-
-function disableWakeLock() {
-  if (wakeLock) {
-    wakeLock.release();
-    wakeLock = null;
-    console.log("🔓 Wake Lock released");
-  }
-}
-
-document.addEventListener("visibilitychange", async () => {
-  if (wakeLock !== null && document.visibilityState === "visible") {
-    try {
-      wakeLock = await navigator.wakeLock.request("screen");
-    } catch (err) {
-      console.log("WakeLock re-request failed");
-    }
-  }
-});
-
-// Helper function – put this OUTSIDE of render(), for example right after render() ends
-function handleStartClick() {
-  const name     = this.dataset.name;
-  const start    = this.dataset.start;
-  const end      = this.dataset.end;
-  const phase    = Number(this.dataset.phase) || 0;
-  const severity = Number(this.dataset.severity) || 1;
-
-  startMainEvent(name, start, phase, severity);
-  startFocusTimer(end);
-}
-
-
-function handleWaterClick() {
-  console.log("💧 [APK DEBUG] Water button CLICKED!");
-  const slot = Number(this.dataset.slot);
-  const startMinute = Number(this.dataset.start);
-  console.log("💧 [APK DEBUG] Slot:", slot, "| Start:", startMinute);
-  markWater(slot, startMinute);
-}
-
-// ──────────────────────────────────────────────
-// ✅ FIXED RENDER FUNCTION - BOTH WATER & EVENT CARDS WORK TOGETHER
-// ──────────────────────────────────────────────
-function render() {
-  try {
-    syncLogsWithTimetable();
-
-    const container = document.getElementById("mainContainer");
-    const phaseInfo = document.getElementById("phaseInfo");
-
-    if (!container) {
-        console.error("mainContainer not found in HTML");
-        return;
-    }
-
-    container.innerHTML = ""; // clear old content
-    
-    const activeEvents = getCurrentMainEvent();
-    const log = getLog();
-    const waterInfo = shouldShowWaterReminder();
-
-    // ✅ FIX 1: Always update phase header, even if no events
-    if (phaseInfo) {
-      if (activeEvents.length === 0) {
-        phaseInfo.innerText = "No Active Phase";
-      } else {
-        const phases = [...new Set(
-          activeEvents.map(e => e.phase || "Unknown").filter(p => p !== "Unknown")
-        )];
-        phaseInfo.innerText = phases.length > 0 
-          ? `Phase ${phases.join(", ")}` 
-          : "Active Event";
-      }
-    }
-
-    // ✅ FIX 2: Water card - ALWAYS shows every 60 minutes
-    if (waterInfo) {
-        const waterCard = document.createElement("div");
-        waterCard.className = "card water-card";
-        waterCard.innerHTML = `
-            <h2>💧 Drink Water (Hour ${waterInfo.slot + 1})</h2>
-            <p>${formatNow()}</p>
-            <button class="water-btn"
-                    data-slot="${waterInfo.slot}"
-                    data-start="${waterInfo.startMinute}">
-                ✔ Done
-            </button>
-        `;
-        container.appendChild(waterCard);
-
-        // Add notification and sound (only once per slot)
-        const slotKey = `${todayKey()}_water_${waterInfo.slot}`;
-        if (!localStorage.getItem("notified_" + slotKey)) {
-            notify(
-  "💧 Drink Water",
-  "Time for your hourly hydration!",
-  slotKey
-);
-
-            localStorage.setItem("notified_" + slotKey, "yes");
-            playAlertSound(slotKey);
-
-        }
-    }
-
-    // ✅ FIX 3: Event cards - render ALL active events
-    activeEvents.forEach(event => {
-      const entry = log.find(e => e.name === event.name);
-      const entryStatus = entry 
-        ? (entry.score === null 
-            ? "🟢 Started | Score: Pending" 
-            : `✅ Completed | Score: ${entry.score}`)
-        : '';
-
-      const eventCard = document.createElement("div");
-      eventCard.className = "card event-card";
-
-      eventCard.innerHTML = `
-        <h2>${event.name || "Unnamed Event"}</h2>
-        <p>${formatNow()}</p>
-        <p>${minutesToTime(toMinutes(event.start))} – ${minutesToTime(toMinutes(event.end))}</p>
-        <p>Severity: ${event.severity || 3}</p>
-        ${entryStatus ? `<p>${entryStatus}</p>` : ''}
-        ${!entry ? `
-          <button class="start-btn"
-        data-name="${event.name}"
-        data-start="${event.start}"
-        data-end="${event.end}"
-        data-phase="${event.phase || 1}"
-        data-severity="${event.severity || 3}">
-  ▶ Start Focus Mode
-</button>
-
-        ` : entry.score === null ? `
-          <p class="status">In Progress – Finish before ${minutesToTime(toMinutes(event.end))}</p>
-        ` : ''}
-      `;
-
-      container.appendChild(eventCard);
-
-      
-    });
-
-    // ✅ CRITICAL FIX: Attach ALL event listeners AFTER all cards are created
-    // This ensures buttons work even after water card is clicked
-    attachAllEventListeners();
-
-    // Debug log
-    console.log("Rendered - Water:", waterInfo ? "YES" : "NO", "| Events:", activeEvents.length);
-
-  } catch (err) {
-    console.error("Error in render():", err);
-  }
-}
-
-// ✅ NEW FUNCTION: Attach event listeners to ALL buttons
-function attachAllEventListeners() {
-  // Attach water button listeners
-  const waterBtns = document.querySelectorAll('.water-btn');
-  console.log("🔧 [APK DEBUG] Attaching water buttons:", waterBtns.length);
-  waterBtns.forEach((btn, index) => {
-    btn.addEventListener('click', handleWaterClick);
-    console.log(`   → Water button ${index} attached`);
-  });
-
-  // Attach event start button listeners
-  const startBtns = document.querySelectorAll('.start-btn');
-  console.log("🔧 [APK DEBUG] Attaching start buttons:", startBtns.length);
-  startBtns.forEach((btn, index) => {
-    btn.addEventListener('click', handleStartClick);
-    console.log(`   → Start button ${index} attached`);
-  });
-  
-  console.log("✅ [APK DEBUG] All event listeners attached successfully");
-}
-
-/* ========= START MAIN EVENT ========= */
-function startMainEvent(name, start, phase, severity) {
-  const delay = Math.max(0, nowMinutes() - toMinutes(start));
-  const log = getLog();
-
-  if (log.some(e => e.name === name)) {
-    console.log("Event already started:", name);
-    render();
-    return;
-  }
-
-  const slotKey = `${todayKey()}_${name}`;
-  if (!localStorage.getItem("notified_" + slotKey)) {
-    notify("Event Started", name);
-    localStorage.setItem("notified_" + slotKey, "yes");
-  }
-  playAlertSound(slotKey);
-
-  log.push({
-
-
-    name,
-    phase,
-    severity,
-    delay,
-    score: null,
-    started: formatNow()
-  });
-
-  saveLog(log);
-  render();
-}
-
-/* ========= FINALIZE MAIN EVENT ========= */
-function finalizeMainEvent(entry) {
-  const severityMultiplier = entry.severity || 1;
-  const rawScore = Math.max(0, 10 - entry.delay);
-  entry.score = Math.round(rawScore * severityMultiplier);
-
-  if (entry.delay > 0) {
-    notify(
-      "Event Auto-Finished",
-      `${entry.name} – Score: ${entry.score}`
-    );
-  }
-
-  saveLog(getLog());
-}
-
-function autoMiss() {
-  const now = nowMinutes();
-  const timetable = getTimetable();
-  const log = getLog();
-
-  timetable.forEach(event => {
-    const startMin = toMinutes(event.start);
-    const endMin = toMinutes(event.end);
-    const entry = log.find(e => e.name === event.name);
-
-    const slotKey = `${todayKey()}_${event.name}_start`;
-
-    // ✅ NEW: Auto notify when event start time arrives
-    if (now >= startMin && now < endMin && !entry) {
-      if (!localStorage.getItem("notified_" + slotKey)) {
-
-        notify(
-          "⏰ Event Started",
-          `${event.name} has started`,
-          slotKey
-        );
-
-        playAlertSound(slotKey);
-
-        localStorage.setItem("notified_" + slotKey, "yes");
-      }
-    }
-
-    // Existing Auto Miss Logic
-    if (now >= endMin && !entry) {
-      log.push({
-        name: event.name,
-        phase: event.phase,
-        severity: event.severity,
-        delay: 999,
-        score: 0,
-        autoMissed: true
-      });
-    }
-
-    if (entry && entry.started && entry.score === null && now >= endMin) {
-      finalizeMainEvent(entry);
-    }
-  });
-
-  saveLog(log);
-
-
-  
-  // Penalize ignored hydration slots at end of day
-  const dayStart = getDayStartMinute();
-  const dayEnd = getDayEndMinute();
-  if (dayStart !== null && dayEnd !== null && now >= dayEnd) {
-    const totalSlots = Math.floor((dayEnd - dayStart) / 60);
-    let updated = false;
-    for (let s = 0; s <= totalSlots; s++) {
-      const alreadyLogged = log.some(e => e.name === "Drink Water" && e.slot === s);
-      if (!alreadyLogged) {
-        log.push({
-          name: "Drink Water",
-          parent: "Daily Hydration",
-          slot: s,
-          phase: "hydration",
-          severity: 1,
-          delay: 999,
-          score: 0
+      // WORDS STORE
+      if (!db.objectStoreNames.contains("words")) {
+        const wordsStore = db.createObjectStore("words", {
+          keyPath: "id",
+          autoIncrement: true
         });
-        updated = true;
+
+        wordsStore.createIndex("word", "word", { unique: false });
+        wordsStore.createIndex("batchId", "batchId", { unique: false });
       }
-    }
-    if (updated) saveLog(log);
-  }
-}
 
-document.addEventListener("DOMContentLoaded", () => {
+      // SESSIONS STORE
+      if (!db.objectStoreNames.contains("sessions")) {
+        db.createObjectStore("sessions", {
+          keyPath: "id",
+          autoIncrement: true
+        });
+      }
 
-  // NAV BUTTONS
-  const historyBtn = document.getElementById("historyBtn");
-  const statsBtn = document.getElementById("statsBtn");
-
-  if (historyBtn) {
-    historyBtn.onclick = () => {
-      window.location.href = "history.html";
+      logDebug("Database structure created");
     };
   }
 
-  if (statsBtn) {
-    statsBtn.onclick = () => {
-      window.location.href = "stats.html";
+  initDB();
+
+
+
+  /***********************
+    BASIC DB HELPERS
+  ************************/
+
+  function addWordToDB(wordObject) {
+    const transaction = db.transaction("words", "readwrite");
+    const store = transaction.objectStore("words");
+    store.add(wordObject);
+  }
+
+  function getAllWords(callback) {
+    const transaction = db.transaction("words", "readonly");
+    const store = transaction.objectStore("words");
+    const request = store.getAll();
+
+    request.onsuccess = function () {
+      callback(request.result);
     };
   }
 
-  // INIT
-  requestNotificationPermission();
-  updateLiveUI();
-  loadCountdownDate();
-  updateExamCountdown();
-  setInterval(updateExamCountdown, 1000);
+  function addSessionToDB(sessionObject, callback) {
+  const transaction = db.transaction("sessions", "readwrite");
+  const store = transaction.objectStore("sessions");
+  const request = store.add(sessionObject);
 
-  setInterval(updateLiveUI, 15 * 1000);
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      updateLiveUI();
-    }
-  });
-
-  // ✅ FIXED: Changed from location.reload() to updateLiveUI()
-  // This prevents infinite reload loop in APK version
-  window.addEventListener("focus", () => {
-    updateLiveUI();
-  });
-
-  window.addEventListener("storage", (e) => {
-    if (e.key === "timetable" || e.key === "timetableUpdated") {
-      updateLiveUI();
-     
-
-    }
-  });
- // 🔄 Resume focus mode if active
-const savedFocus = localStorage.getItem("activeFocusEnd");
-if (savedFocus) {
-  const endDate = new Date(savedFocus);
-
-  if (endDate > new Date()) {
-    startFocusTimerFromResume(endDate);
-  } else {
-    localStorage.removeItem("activeFocusEnd");
-  }
-}
-});
-
-/* ========= INIT ========= */
-
-
-
-function updateLiveClock() {
-  const clock = document.getElementById("liveClock");
-  if (!clock) return;
-
-  const now = new Date();
-  clock.innerHTML = now.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true
-  });
-}
-
-// start live clock
-updateLiveClock();
-setInterval(updateLiveClock, 1000);
-
-function syncLogsWithTimetable() {
-  const timetable = getTimetable();
-  const validNames = timetable.map(e => e.name);
-
-  const log = getLog();
-  const cleaned = log.filter(e =>
-  e.phase === "micro" ||
-  e.phase === "hydration" ||
-  validNames.includes(e.name)
-);
-
-
-  if (cleaned.length !== log.length) {
-    saveLog(cleaned);
-  }
-}
-
-// ================= TIMETABLE-BASED HYDRATION & DAY BOUNDARY =================
-
-function getDayStartMinute() {
-  const tt = getTimetable();
-  if (tt.length === 0) return null;
-
-  const starts = tt.map(e => toMinutes(e.start)).filter(n => !isNaN(n));
-  if (starts.length === 0) return null;
-
-  return Math.min(...starts);
-}
-
-function getDayEndMinute() {
-  const tt = getTimetable();
-  if (tt.length === 0) return null;
-
-  const ends = tt.map(e => toMinutes(e.end)).filter(n => !isNaN(n));
-  if (ends.length === 0) return null;
-
-  return Math.max(...ends);
-}
-
-function getCurrentWaterSlot() {
-  const dayStart = getDayStartMinute();
-  if (dayStart === null) return null;
-
-  const now = nowMinutes();
-  if (now < dayStart) return null;
-
-  const elapsed = now - dayStart;
-  return Math.floor(elapsed / 60);
-}
-
-function shouldShowWaterReminder() {
-  const dayStart = getDayStartMinute();
-  if (dayStart === null) return null;
-
-  const now = nowMinutes();
-  if (now < dayStart) return null;
-
-  const dayEnd = getDayEndMinute();
-  if (dayEnd !== null && now >= dayEnd) return null;
-
-  const elapsed = now - dayStart;
-
-  // Slot 0 = first event start time
-  const slot = Math.floor(elapsed / 60);
-
-  const log = getLog();
-
-  // Penalize ALL previous missed slots
-  for (let s = 0; s < slot; s++) {
-    const alreadyLogged = log.some(
-      e => e.name === "Drink Water" && e.slot === s
-    );
-    if (!alreadyLogged) {
-      log.push({
-        name: "Drink Water",
-        parent: "Daily Hydration",
-        slot: s,
-        phase: "hydration",
-        severity: 1,
-        delay: 999,
-        score: 0
-      });
-    }
-  }
-  if (slot > 0) saveLog(log);
-
-  // Show reminder only if current slot not logged
-  const currentLogged = log.some(
-    e => e.name === "Drink Water" && e.slot === slot
-  );
-
-  if (currentLogged) return null;
-
-  const startMin = dayStart + slot * 60;
-
-  return { slot, startMinute: startMin };
+  request.onsuccess = function () {
+    if (callback) callback();
+  };
 }
 
 
 
-function markWaterDone(slot) {
-  render();
-}
 
-function markWater(slot, startMinute) {
-  const log = getLog();
-  console.log("Marking water as done for slot: " + slot);
+  /***********************
+    EXCEL UPLOAD HANDLER
+  ************************/
 
-  // Prevent duplicate logging for same slot
-  const alreadyLogged = log.some(
-    e => e.name === "Drink Water" && e.slot === slot
-  );
+  document.getElementById("uploadBtn").addEventListener("click", function () {
+    const fileInput = document.getElementById("excelFile");
+    const file = fileInput.files[0];
 
-  if (alreadyLogged) {
-    render();
-    return;
-  }
-
-  const delay = Math.max(0, nowMinutes() - startMinute);
-  const score = delay <= 15 ? 10 - delay : 0;
-
-  log.push({
-    name: "Drink Water",
-    parent: "Daily Hydration",
-    slot,
-    phase: "hydration",
-    severity: 1,
-    delay,
-    score
-  });
-
-  saveLog(log);
-  render();
-}
-
-
-// ──────────────────────────────────────────────
-// LIVE UPDATES – clock + events + hydration + auto-miss
-// ──────────────────────────────────────────────
-
-function updateLiveUI() {
-    updateLiveClock();     // refresh clock
-    autoMiss();            // check for missed/ended events
-    render();
-    updateHomeStreak();   // ← ADD THIS LINE
-// update screen
-}
-
-
-// Helper to calculate total unique scheduled minutes from timetable (merges overlaps)
-function getTotalUniqueScheduledMinutes(tt) {
-  if (tt.length === 0) return 0;
-
-  // Sort events by start time
-  const events = tt.slice().sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
-
-  let total = 0;
-  let currentStart = toMinutes(events[0].start);
-  let currentEnd = toMinutes(events[0].end);
-
-  for (let i = 1; i < events.length; i++) {
-    const start = toMinutes(events[i].start);
-    const end = toMinutes(events[i].end);
-
-    if (start >= currentEnd) {
-      // No overlap, add previous duration
-      total += currentEnd - currentStart;
-      currentStart = start;
-      currentEnd = end;
-    } else {
-      // Overlap, extend end if needed
-      currentEnd = Math.max(currentEnd, end);
-    }
-  }
-
-  // Add the last interval
-  total += currentEnd - currentStart;
-
-  return total;
-}
-/* ========= DYNAMIC COUNTDOWN ========= */
-
-let countdownTarget = null;
-
-
-function loadCountdownDate() {
-  const saved = localStorage.getItem("countdownTarget");
-  if (saved) {
-    countdownTarget = new Date(saved);
-  }
-}
-
-function updateExamCountdown() {
-  const countdownElement = document.getElementById("examCountdown");
-  if (!countdownElement) return;
-
-  if (!countdownTarget) {
-    countdownElement.innerHTML = "⏳ No countdown set";
-    return;
-  }
-
-  const now = new Date();
-  const diff = countdownTarget - now;
-
-  if (diff <= 0) {
-    countdownElement.innerHTML = "🎉 Countdown Completed!";
-    return;
-  }
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-  const minutes = Math.floor((diff / (1000 * 60)) % 60);
-  const seconds = Math.floor((diff / 1000) % 60);
-
-  countdownElement.innerHTML =
-    `🎯 ${days}d ${hours}h ${minutes}m ${seconds}s`;
-}
-
-
-
-/* ================= HOME DISCIPLINE STREAK ================= */
-
-function calculateDisciplinePercent(log) {
-  let max = 0, got = 0;
-
-  log.forEach(e => {
-    if (e.phase === "micro" || e.phase === "hydration") return;
-    const score = e.score !== null ? e.score : (e.started ? e.severity * 10 : 0);
-    max += e.severity * 10;
-    got += score;
-  });
-
-  return max ? Math.round((got / max) * 100) : 0;
-}
-
-function updateHomeStreak() {
-  const streakElement = document.getElementById("streakDisplay");
-  if (!streakElement) return;
-
-  let streak = 0;
-  const today = new Date();
-
-  for (let i = 0; ; i++) {
-    const d = new Date();
-    d.setDate(today.getDate() - i);
-    const key = d.toISOString().split("T")[0];
-
-    const log = JSON.parse(localStorage.getItem(key));
-    if (!log) break;
-
-    // ✅ NEW: If checking today, ensure day is finished
-    if (i === 0) {
-      const dayEnd = getDayEndMinute();
-      const now = nowMinutes();
-
-      if (dayEnd !== null && now < dayEnd) {
-        // Day not finished yet → stop streak calculation here
-        break;
-      }
-    }
-
-    const percent = calculateDisciplinePercent(log);
-
-    if (percent >= 60) {
-      streak++;
-    } else {
-      break;
-    }
-  }
-
-  streakElement.innerHTML = `🔥 ${streak} Day Streak`;
-}
-
-function startFocusTimer(endTime) {
-
-  if (document.getElementById("focusOverlay")) return;
-
-  enableWakeLock();
-
-
-const [h, m] = endTime.split(":").map(Number);
-const endDate = new Date();
-endDate.setHours(h, m, 0, 0);
-// 💾 Save active focus session
-localStorage.setItem("activeFocusEnd", endDate.toISOString());
-
-  const overlay = document.createElement("div");
-  overlay.id = "focusOverlay";
-  overlay.style = `
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  background: black;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  z-index: 999999;
-`;
-
-
-  overlay.innerHTML = `
-  <h1 style="
-  font-size: clamp(2.5rem, 8vw, 4rem);
-    font-weight: 900;
-    letter-spacing: 3px;
-    margin-bottom: 40px;
-  ">
-    FOCUS MODE
-  </h1>
-
-  <div id="focusTimerDisplay" style="
-font-size: clamp(3rem, 12vw, 5rem);
-    font-weight: 900;
-    margin-bottom: 40px;
-    max-width: 90vw;
-
-  "></div>
-
-  <button id="exitFocusBtn" style="
-    padding: 15px 30px;
-    font-size: 1.2rem;
-    font-weight: bold;
-  ">
-    ❌ Exit
-  </button>
-`;
-
-
-
-
-  document.body.appendChild(overlay);
-  overlay.querySelector("#exitFocusBtn")
-  .addEventListener("click", exitFocusMode);
-
-  focusTimer = setInterval(() => {
-  const now = new Date();
-  const remainingMs = endDate - now;
-
-  if (remainingMs <= 0) {
-    clearInterval(focusTimer);
-    localStorage.removeItem("activeFocusEnd");
-    overlay.remove();
-    disableWakeLock();
-    notify("🎉 Focus Complete", "Session Finished");
-    playAlertSound("focus_done");
-    return;
-  }
-
-  const mins = Math.floor(remainingMs / 60000);
-  const secs = Math.floor((remainingMs % 60000) / 1000);
-
-  document.getElementById("focusTimerDisplay").innerHTML =
-  `
-  <div style="font-size: clamp(2rem,6vw,3rem); margin-bottom:10px;">
-    ⏳
-  </div>
-  <div style="font-size: clamp(3rem,10vw,5rem); font-weight:900;">
-    ${mins}m ${secs}s
-  </div>
-  `;
-}, 1000);   
-
-}
-
-function startFocusTimerFromResume(endDate) {
-
-  if (document.getElementById("focusOverlay")) return;
-
-  enableWakeLock();
-
-  const overlay = document.createElement("div");
-  overlay.id = "focusOverlay";
-  overlay.style = `
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  background: black;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  z-index: 999999;
-`;
-
-
-  overlay.innerHTML = `
-  <h1 style="
-    font-size: clamp(2.5rem, 8vw, 4rem);
-    font-weight: 900;
-    letter-spacing: 3px;
-    margin-bottom: 40px;
-  ">
-    FOCUS MODE
-  </h1>
-
-  <div id="focusTimerDisplay" style="
-font-size: clamp(3rem, 12vw, 5rem);
-    font-weight: 900;
-    margin-bottom: 40px;
-    max-width: 90vw;
-
-  "></div>
-
-  <button id="exitFocusBtn" style="
-    padding: 15px 30px;
-    font-size: 1.2rem;
-    font-weight: bold;
-  ">
-    ❌ Exit
-  </button>
-`;
-
-
-  document.body.appendChild(overlay);
-
-  overlay.querySelector("#exitFocusBtn")
-    .addEventListener("click", exitFocusMode);
-
-  focusTimer = setInterval(() => {
-    const now = new Date();
-    const remainingMs = endDate - now;
-
-    if (remainingMs <= 0) {
-      clearInterval(focusTimer);
-      localStorage.removeItem("activeFocusEnd");
-      overlay.remove();
-      disableWakeLock();
-      notify("🎉 Focus Complete", "Session Finished");
-      playAlertSound("focus_done");
+    if (!file) {
+      alert("Please select an Excel file.");
       return;
     }
 
-    const mins = Math.floor(remainingMs / 60000);
-    const secs = Math.floor((remainingMs % 60000) / 1000);
+    if (!db) {
+      alert("Database not ready yet. Please refresh.");
+      return;
+    }
 
-    document.getElementById("focusTimerDisplay").innerHTML =
-  `
-  <div style="font-size: clamp(2rem,6vw,3rem); margin-bottom:10px;">
-    ⏳
-  </div>
-  <div style="font-size: clamp(3rem,10vw,5rem); font-weight:900;">
-    ${mins}m ${secs}s
-  </div>
-  `;
-}, 1000);   
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        if (jsonData.length === 0) {
+          alert("Excel file is empty or invalid format.");
+          return;
+        }
+
+        const batchId = new Date().toISOString();
+
+        let addedCount = 0;
+
+        jsonData.forEach(row => {
+          const wordObject = {
+  word: row.Word ? row.Word.trim() : "",
+  meanings: row.Meaning
+    ? row.Meaning.split(",").map(m => m.trim())
+    : [],
+  wrongCount: 0,
+  correctCount: 0,
+  totalAttempts: 0,
+  lastAsked: null,
+  reviewInterval: 1,
+  nextReviewDate: Date.now(),
+  batchId: batchId,
+  createdAt: new Date()
+};
+
+
+          if (wordObject.word !== "") {
+            addWordToDB(wordObject);
+            addedCount++;
+          }
+        });
+
+        logDebug("Excel processed. Words added: " + addedCount);
+
+        document.getElementById("uploadStatus").innerText =
+          "Upload successful! Words saved to database.";
+
+        fileInput.value = "";
+
+      } catch (error) {
+        logDebug("Excel Processing Error: " + error.message);
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+  });
+
+let allWordsGlobal = [];
+
+/***********************
+  QUIZ ENGINE
+************************/
+
+let currentQuestions = [];
+let currentIndex = 0;
+let score = 0;
+let examMode = false;
+let sessionResults = [];
+
+let timerInterval = null;
+let timeLeft = 0;
+let quizStartTime = 0;
+let quizEndTime = 0;
+
+
+
+// Start Practice
+document.getElementById("startPractice").addEventListener("click", function () {
+  const count = parseInt(document.getElementById("practiceCountInput").value);
+  startQuiz(count, false);
+});
+document.getElementById("startWeakMode").addEventListener("click", function () {
+  startWeakDrill(20); // 20 weak questions
+});
+
+// Start Exam
+document.getElementById("startExam").addEventListener("click", function () {
+startQuiz(50, true);
+});
+function shuffleArray(array) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 
-function exitFocusMode() {
-  clearInterval(focusTimer);
-  focusTimer = null;
-  disableWakeLock();
-  localStorage.removeItem("activeFocusEnd"); // 🧹 clear saved focus
-  const overlay = document.getElementById("focusOverlay");
-  if (overlay) overlay.remove();
-}
+function startQuiz(totalQuestions, isExam) {
 
-const sentences = [
-  "Got a headache?",
-  "Get a damn cup of ☕",
-  "You need consistency.",
-  "Confidence comes later",
-  "What you are doing now",
-  "May feel pointless today",
-  "but consistency will prove ",
-  "It wasn’t..."
-];
-
-
-
-
-let sentenceIndex = 0;
-let charIndex = 0;
-let isDeleting = false;
-
-function typeEffect() {
-  const textElement = document.getElementById("typeText");
-  if (!textElement) return;
-
-  const currentSentence = sentences[sentenceIndex];
-
-  if (!isDeleting) {
-    // Typing
-    textElement.innerText = currentSentence.substring(0, charIndex + 1);
-    charIndex++;
-
-    if (charIndex === currentSentence.length) {
-      setTimeout(() => isDeleting = true, 800); // pause before deleting
-    }
-  } else {
-    // Deleting
-    textElement.innerText = currentSentence.substring(0, charIndex - 1);
-    charIndex--;
-
-    if (charIndex === 0) {
-      isDeleting = false;
-      sentenceIndex = (sentenceIndex + 1) % sentences.length;
-    }
+  if (!db) {
+    alert("Database not ready.");
+    return;
   }
 
-  setTimeout(typeEffect, isDeleting ? 25 : 45); // slow typing
+  getAllWords(function (words) {
+
+    allWordsGlobal = words;
+
+    if (words.length < 5) {
+      alert("Not enough words in database.");
+      return;
+    }
+
+    examMode = isExam;
+    score = 0;
+    currentIndex = 0;
+    sessionResults = [];
+    quizStartTime = Date.now();
+
+
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    const freshWords = words.filter(w => {
+      return !w.lastAsked || (now - w.lastAsked) > oneDay;
+    });
+
+    const nowTime = Date.now();
+
+const dueWords = words.filter(w =>
+  !w.nextReviewDate || w.nextReviewDate <= nowTime
+);
+
+const pool = dueWords.length >= totalQuestions ? dueWords : words;
+
+
+    // ---- Adaptive Difficulty Engine ----
+
+    const threeDays = 3 * 24 * 60 * 60 * 1000;
+
+    let weak = [];
+    let medium = [];
+    let strong = [];
+
+    pool.forEach(word => {
+
+      const wrong = word.wrongCount || 0;
+      const correct = word.correctCount || 0;
+      const lastAsked = word.lastAsked || 0;
+
+      if ((now - lastAsked) > threeDays) {
+        medium.push(word);
+        return;
+      }
+
+      if (wrong > correct) {
+        weak.push(word);
+      } else if (correct > wrong && correct > 2) {
+        strong.push(word);
+      } else {
+        medium.push(word);
+      }
+    });
+
+    weak = shuffleArray(weak);
+    medium = shuffleArray(medium);
+    strong = shuffleArray(strong);
+
+    const weakCount = Math.floor(totalQuestions * 0.5);
+    const mediumCount = Math.floor(totalQuestions * 0.3);
+    const strongCount = totalQuestions - weakCount - mediumCount;
+
+    let selected = [
+      ...weak.slice(0, weakCount),
+      ...medium.slice(0, mediumCount),
+      ...strong.slice(0, strongCount)
+    ];
+
+    if (selected.length < totalQuestions) {
+
+      const remaining = shuffleArray(
+        pool.filter(w => !selected.includes(w))
+      );
+
+      selected = [
+        ...selected,
+        ...remaining.slice(0, totalQuestions - selected.length)
+      ];
+    }
+
+    currentQuestions = shuffleArray(selected);
+
+    enterFocusMode();
+renderQuestion();
+
+  });
+}
+function startWeakDrill(totalQuestions) {
+
+  if (!db) {
+    alert("Database not ready.");
+    return;
+  }
+
+  getAllWords(function (words) {
+
+    examMode = false; // Drill behaves like practice
+    score = 0;
+    currentIndex = 0;
+
+    // Sort by wrongCount descending
+    const sortedByWeakness = [...words]
+      .sort((a, b) => (b.wrongCount || 0) - (a.wrongCount || 0));
+
+    const weakestPool = sortedByWeakness.slice(0, 30);
+
+    const shuffled = shuffleArray(weakestPool);
+
+    currentQuestions = shuffled.slice(0, totalQuestions);
+
+enterFocusMode();
+renderQuestion();
+
+  });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  typeEffect();
+function renderQuestion() {
+
+  if (currentIndex >= currentQuestions.length) {
+    endQuiz();
+    return;
+  }
+
+  const container = document.getElementById("focusContent");
+
+
+  container.innerHTML = "";
+// ===== EXIT BUTTON =====
+const exitBtn = document.createElement("button");
+exitBtn.innerText = "Exit";
+exitBtn.style.alignSelf = "flex-end";
+exitBtn.style.background = "#444";
+exitBtn.onclick = function () {
+  if (confirm("Are you sure you want to exit? Progress will be lost.")) {
+    exitFocusMode();
+  }
+};
+container.appendChild(exitBtn);
+
+  const question = currentQuestions[currentIndex];
+  updateLastAsked(question.id);
+
+  // Progress + Score
+  const infoBar = document.createElement("div");
+  infoBar.style.marginBottom = "10px";
+  infoBar.style.fontWeight = "bold";
+  infoBar.innerText =
+    `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
+  container.appendChild(infoBar);
+
+  // Question title
+  const title = document.createElement("h3");
+title.innerText = question.word;
+
+if (examMode) {
+  title.classList.add("exam-word");
+} else {
+  title.classList.add("practice-word");
+}
+
+container.appendChild(title);
+
+
+  // Timer (exam only)
+  if (examMode) {
+    const timerDisplay = document.createElement("div");
+    timerDisplay.className = "timer";
+    container.appendChild(timerDisplay);
+    startTimer(timerDisplay);
+  }
+
+  // Generate options
+  const options = generateOptions(question);
+
+  options.forEach(optionText => {
+    const label = document.createElement("label");
+    label.className = "option";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = optionText;
+
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(optionText));
+
+    container.appendChild(label);
+  });
+
+  const submitBtn = document.createElement("button");
+submitBtn.innerText = "Submit";
+submitBtn.className = "submit-btn";
+submitBtn.onclick = checkAnswer;
+container.appendChild(submitBtn);
+
+}
+
+
+function generateOptions(question) {
+
+  const maxCorrectAllowed = 3;
+
+  const shuffledCorrect = shuffleArray(question.meanings);
+
+  const possibleMax = Math.min(maxCorrectAllowed, shuffledCorrect.length);
+
+  // 🎯 Weighted Probability Logic
+  // 🎯 Dynamic Difficulty Based on Performance
+
+const accuracy = calculateAccuracy(question);
+
+let numberOfCorrect;
+const rand = Math.random();
+
+if (accuracy < 50) {
+  // Weak word → Easier
+  if (rand < 0.85) numberOfCorrect = 1;
+  else numberOfCorrect = 2;
+}
+
+else if (accuracy < 80) {
+  // Medium word → Balanced
+  if (rand < 0.6) numberOfCorrect = 1;
+  else if (rand < 0.9) numberOfCorrect = 2;
+  else numberOfCorrect = 3;
+}
+
+else {
+  // Strong word → Harder
+  if (rand < 0.3) numberOfCorrect = 1;
+  else if (rand < 0.7) numberOfCorrect = 2;
+  else numberOfCorrect = 3;
+}
+
+
+  numberOfCorrect = Math.min(numberOfCorrect, possibleMax);
+
+  const correctToUse = shuffledCorrect.slice(0, numberOfCorrect);
+
+  // Build incorrect pool
+  const otherWords = allWordsGlobal.filter(
+    w => w.word !== question.word
+  );
+
+  let incorrectPool = [];
+
+  otherWords.forEach(w => {
+    w.meanings.forEach(m => {
+      incorrectPool.push(m);
+    });
+  });
+
+  incorrectPool = [...new Set(incorrectPool)];
+
+  const shuffledIncorrect = shuffleArray(incorrectPool);
+
+  const totalOptions = 5;
+  const neededIncorrect = totalOptions - correctToUse.length;
+
+  const selectedIncorrect = shuffledIncorrect.slice(0, neededIncorrect);
+
+  const finalOptions = shuffleArray([
+    ...correctToUse,
+    ...selectedIncorrect
+  ]);
+
+  // Store correct answers temporarily
+  question.currentCorrectAnswers = correctToUse;
+
+  return finalOptions;
+}
+
+
+
+
+
+
+
+function checkAnswer() {
+
+  const container = document.getElementById("focusContent");
+
+
+  const checkboxes = container.querySelectorAll("input[type='checkbox']");
+  const selected = [];
+
+  checkboxes.forEach(cb => {
+    if (cb.checked) selected.push(cb.value);
+  });
+
+const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
+  const totalCorrect = correctAnswers.length;
+  const currentWordId = currentQuestions[currentIndex].id;
+
+  let correctSelected = 0;
+  let wrongSelected = 0;
+
+  selected.forEach(option => {
+    if (correctAnswers.includes(option)) {
+      correctSelected++;
+    } else {
+      wrongSelected++;
+    }
+  });
+
+  let questionScore = 0;
+
+  // 🚫 Nothing selected
+  if (selected.length === 0) {
+    questionScore = 0;
+  }
+
+  // ❌ Any wrong selected
+  else if (wrongSelected > 0) {
+    questionScore = examMode ? -0.25 : 0;
+  }
+
+  // ✅ Only correct selected
+  else {
+    questionScore = correctSelected / totalCorrect;
+  }
+
+  score += questionScore;
+
+updateWordStats(currentWordId, questionScore);
+// Store session result
+sessionResults.push({
+  word: currentQuestions[currentIndex].word,
+  correctAnswers: correctAnswers,
+  selectedAnswers: selected,
+  isCorrect: questionScore > 0,
 });
 
 
+  // 🔵 PRACTICE MODE VISUAL FEEDBACK
+  if (!examMode) {
+
+    checkboxes.forEach(cb => {
+      const label = cb.parentElement;
+
+      // Correct answers → green
+      if (correctAnswers.includes(cb.value)) {
+        label.style.backgroundColor = "#c8e6c9";
+      }
+
+      // Wrong selected → red
+      if (cb.checked && !correctAnswers.includes(cb.value)) {
+        label.style.backgroundColor = "#ffcdd2";
+      }
+    });
+
+    // Update score display
+    const infoBar = container.firstChild;
+    infoBar.innerText =
+      `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
+
+    // Disable submit
+const submitBtn = container.querySelector(".submit-btn");
+if (submitBtn) submitBtn.disabled = true;
+
+
+    setTimeout(() => {
+      currentIndex++;
+      renderQuestion();
+    }, 1500);
+
+  } else {
+    // 🔴 EXAM MODE → No color feedback
+    currentIndex++;
+    clearInterval(timerInterval);
+    renderQuestion();
+  }
+}
+
+
+
+function startTimer(displayElement) {
+
+  // Stop any previous timer
+  clearInterval(timerInterval);
+
+  // Reset time for EACH question
+  timeLeft = parseInt(document.getElementById("examTimerInput").value);
+
+  // Safety check
+  if (isNaN(timeLeft) || timeLeft <= 0) {
+    timeLeft = 10; // default fallback
+  }
+
+  displayElement.innerText = "Time Left: " + timeLeft;
+
+  timerInterval = setInterval(() => {
+
+    timeLeft--;
+
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      displayElement.innerText = "Time Left: 0";
+      currentIndex++;
+      renderQuestion();
+      return;
+    }
+
+    displayElement.innerText = "Time Left: " + timeLeft;
+
+  }, 1000);
+}
+
+
+function showAnalytics(container) {
+
+  getAllWords(function (words) {
+
+    let totalAttempts = 0;
+    let totalCorrect = 0;
+
+    words.forEach(word => {
+      totalAttempts += word.totalAttempts || 0;
+      totalCorrect += word.correctCount || 0;
+    });
+
+    const accuracy = totalAttempts > 0
+      ? ((totalCorrect / totalAttempts) * 100).toFixed(2)
+      : 0;
+
+    // Sort weakest words
+    const weakest = [...words]
+      .sort((a, b) => (b.wrongCount || 0) - (a.wrongCount || 0))
+      .slice(0, 10);
+
+    // Sort strongest words
+    const strongest = [...words]
+      .sort((a, b) => (b.correctCount || 0) - (a.correctCount || 0))
+      .slice(0, 5);
+
+    const analyticsDiv = document.createElement("div");
+    analyticsDiv.style.marginTop = "20px";
+    analyticsDiv.style.padding = "15px";
+    analyticsDiv.style.borderTop = "2px solid #ccc";
+
+    analyticsDiv.innerHTML = `
+      <h3>📊 Performance Analytics</h3>
+      <p><strong>Overall Accuracy:</strong> ${accuracy}%</p>
+
+      <h4>⚠ Weakest Words</h4>
+      <ul>
+        ${weakest.map(w =>
+          `<li>${w.word} (Wrong: ${w.wrongCount || 0})</li>`
+        ).join("")}
+      </ul>
+
+      <h4>🔥 Strongest Words</h4>
+      <ul>
+        ${strongest.map(w =>
+          `<li>${w.word} (Correct: ${w.correctCount || 0})</li>`
+        ).join("")}
+      </ul>
+    `;
+
+    container.appendChild(analyticsDiv);
+  });
+}
+function calculateAccuracy(word) {
+  const total = word.totalAttempts || 0;
+  if (total === 0) return 0;
+  return ((word.correctCount || 0) / total) * 100;
+}
+
+
+function loadSessionAnalytics() {
+
+  const transaction = db.transaction("sessions", "readonly");
+  const store = transaction.objectStore("sessions");
+  const request = store.getAll();
+
+  request.onsuccess = function () {
+
+    const sessions = request.result;
+    const container = document.getElementById("analyticsContainer");
+    container.innerHTML = "";
+
+    if (!sessions || sessions.length === 0) {
+      container.innerHTML = "<p>No sessions yet.</p>";
+      return;
+    }
+
+    const practiceSessions = sessions.filter(s => s.mode === "practice");
+    const examSessions = sessions.filter(s => s.mode === "exam");
+
+    function createCard(title, sessionList, color) {
+
+      if (sessionList.length === 0) {
+        return `
+          <div class="analytics-card" style="border-top: 4px solid ${color}">
+            <h3>${title}</h3>
+            <p>No sessions yet.</p>
+          </div>
+        `;
+      }
+
+      const totalSessions = sessionList.length;
+
+      const avgAccuracy = (
+        sessionList.reduce((sum, s) => sum + parseFloat(s.accuracy || 0), 0) /
+        totalSessions
+      ).toFixed(2);
+
+      const bestScore = Math.max(...sessionList.map(s => s.score || 0));
+
+      const avgTime = (
+        sessionList.reduce((sum, s) => sum + parseFloat(s.avgTimePerQuestion || 0), 0) /
+        totalSessions
+      ).toFixed(2);
+
+      return `
+        <div class="analytics-card" style="border-top: 4px solid ${color}">
+          <h3>${title}</h3>
+          <div class="analytics-row"><span>Total Sessions</span><span>${totalSessions}</span></div>
+          <div class="analytics-row"><span>Average Accuracy</span><span>${avgAccuracy}%</span></div>
+          <div class="analytics-row"><span>Best Score</span><span>${bestScore}</span></div>
+          <div class="analytics-row"><span>Avg Time / Question</span><span>${avgTime} sec</span></div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = `
+      <div class="analytics-grid">
+        ${createCard("📘 Practice Performance", practiceSessions, "#00c8ff")}
+        ${createCard("📕 Exam Performance", examSessions, "#ff1a1a")}
+      </div>
+    `;
+  };
+}
 
 
 
 
+function updateLastAsked(wordId) {
+
+  const transaction = db.transaction("words", "readwrite");
+  const store = transaction.objectStore("words");
+
+  const request = store.get(wordId);
+
+  request.onsuccess = function () {
+    const word = request.result;
+    if (!word) return;
+
+    word.lastAsked = Date.now();
+    store.put(word);
+  };
+}
 
 
+const fileInput = document.getElementById("excelFile");
+const customFileBtn = document.getElementById("customFileBtn");
+const fileNameDisplay = document.getElementById("fileName");
 
+customFileBtn.addEventListener("click", () => {
+  fileInput.click();
+});
+
+fileInput.addEventListener("change", () => {
+  if (fileInput.files.length > 0) {
+    fileNameDisplay.textContent = fileInput.files[0].name;
+  } else {
+    fileNameDisplay.textContent = "No file selected";
+  }
+});
+
+/***********************
+  FOCUS MODE FUNCTIONS
+************************/
+
+function enterFocusMode() {
+  const focus = document.getElementById("focusMode");
+
+  focus.classList.add("active");
+  document.body.classList.add("locked");
+}
+
+
+function endQuiz() {
+
+  // Stop timer if running
+  clearInterval(timerInterval);
+
+  // Record end time
+  quizEndTime = Date.now();
+
+  const container = document.getElementById("focusContent");
+  container.innerHTML = "";
+
+  const totalQuestions = sessionResults.length;
+  const correctCount = sessionResults.filter(r => r.isCorrect).length;
+  const wrongCount = totalQuestions - correctCount;
+
+  const accuracy = totalQuestions > 0
+    ? ((correctCount / totalQuestions) * 100).toFixed(2)
+    : 0;
+
+  // Time calculations
+  const totalTimeMs = quizEndTime - quizStartTime;
+  const totalTimeSec = Math.floor(totalTimeMs / 1000);
+  const avgTimePerQuestion = totalQuestions > 0
+    ? (totalTimeSec / totalQuestions).toFixed(2)
+    : 0;
+
+  // ===== SUMMARY SECTION =====
+  const summary = document.createElement("div");
+  summary.innerHTML = `
+    <h2>📊 Session Summary</h2>
+    <p><strong>Total Attempted:</strong> ${totalQuestions}</p>
+    <p><strong>Correct:</strong> ${correctCount}</p>
+    <p><strong>Wrong:</strong> ${wrongCount}</p>
+    <p><strong>Accuracy:</strong> ${accuracy}%</p>
+    <p><strong>Total Time Taken:</strong> ${totalTimeSec} seconds</p>
+    <p><strong>Average Time per Question:</strong> ${avgTimePerQuestion} sec</p>
+    <hr style="margin:20px 0;">
+    <h3>❌ Words Done Wrong</h3>
+  `;
+
+  container.appendChild(summary);
+
+  // ===== WRONG WORDS LIST =====
+  const wrongWords = sessionResults.filter(r => !r.isCorrect);
+
+  if (wrongWords.length === 0) {
+
+    const perfect = document.createElement("p");
+    perfect.innerHTML = "🔥 <strong>Perfect Session!</strong> No wrong answers.";
+    container.appendChild(perfect);
+
+  } else {
+
+    wrongWords.forEach(item => {
+
+      const div = document.createElement("div");
+      div.style.marginBottom = "15px";
+      div.style.padding = "12px";
+      div.style.background = "#181818";
+      div.style.border = "1px solid #333";
+      div.style.borderRadius = "10px";
+
+      div.innerHTML = `
+        <strong style="color:#ff4d4d;">${item.word}</strong><br>
+        <span style="color:#bbb;">Your Answer:</span> 
+          ${item.selectedAnswers.length > 0 ? item.selectedAnswers.join(", ") : "None"}<br>
+        <span style="color:#00e676;">Correct Answer:</span> 
+          ${item.correctAnswers.join(", ")}
+      `;
+
+      container.appendChild(div);
+    });
+  }
+
+  // ===== RETURN BUTTON =====
+  const exitBtn = document.createElement("button");
+  exitBtn.innerText = "Return to Dashboard";
+  exitBtn.style.marginTop = "25px";
+  exitBtn.onclick = exitFocusMode;
+  container.appendChild(exitBtn);
+
+  // ===== SAVE SESSION =====
+  addSessionToDB({
+  mode: examMode ? "exam" : "practice",
+  score: score,
+  totalQuestions: totalQuestions,
+  correct: correctCount,
+  wrong: wrongCount,
+  accuracy: accuracy,
+  totalTimeSec: totalTimeSec,
+  avgTimePerQuestion: avgTimePerQuestion,
+  date: new Date(),
+  timestamp: Date.now()
+}, function () {
+  loadSessionAnalytics(); // Auto refresh AFTER DB save
+});
+
+
+}
+
+function exitFocusMode() {
+  const focus = document.getElementById("focusMode");
+
+  focus.classList.remove("active");
+  document.body.classList.remove("locked");
+
+  document.getElementById("focusContent").innerHTML = "";
+}
+
+
+setTimeout(() => {
+  loadSessionAnalytics();
+}, 500);
+function masterDeleteAllData() {
+
+  const password = prompt("Enter Master Password:");
+
+  if (password !== "552554") {
+    alert("Incorrect Password!");
+    return;
+  }
+
+  if (!confirm("This will permanently delete ALL data. Are you absolutely sure?")) {
+    return;
+  }
+
+  const transaction = db.transaction(["words", "sessions"], "readwrite");
+
+  const wordsStore = transaction.objectStore("words");
+  const sessionsStore = transaction.objectStore("sessions");
+
+  wordsStore.clear();
+  sessionsStore.clear();
+
+  transaction.oncomplete = function () {
+    alert("All data deleted successfully.");
+
+    // Refresh analytics after deletion
+    loadSessionAnalytics();
+  };
+
+  transaction.onerror = function () {
+    alert("Error deleting data.");
+  };
+}
+
+document.getElementById("masterDeleteBtn")
+  .addEventListener("click", masterDeleteAllData);
+// ===== THEME SYSTEM =====
+
+const themeBtn = document.getElementById("themeToggleBtn");
+
+// Load saved theme
+const savedTheme = localStorage.getItem("theme");
+
+if (savedTheme === "light") {
+  document.body.classList.add("light-mode");
+  themeBtn.innerText = "☀ Light Mode";
+} else {
+  themeBtn.innerText = "🌙 Dark Mode";
+}
+
+themeBtn.addEventListener("click", function () {
+
+  document.body.classList.toggle("light-mode");
+
+  if (document.body.classList.contains("light-mode")) {
+    localStorage.setItem("theme", "light");
+    themeBtn.innerText = "☀ Light Mode";
+  } else {
+    localStorage.setItem("theme", "dark");
+    themeBtn.innerText = "🌙 Dark Mode";
+  }
+
+});
+function updateWordStats(wordId, performanceScore) {
+
+  const transaction = db.transaction("words", "readwrite");
+  const store = transaction.objectStore("words");
+  const request = store.get(wordId);
+
+  request.onsuccess = function () {
+
+    const word = request.result;
+    if (!word) return;
+
+    word.totalAttempts = (word.totalAttempts || 0) + 1;
+
+    const now = Date.now();
+
+    if (performanceScore <= 0) {
+      word.wrongCount = (word.wrongCount || 0) + 1;
+      word.reviewInterval = 1;
+    }
+
+    else if (performanceScore < 1) {
+      word.correctCount = (word.correctCount || 0) + 1;
+      word.reviewInterval = 2;
+    }
+
+    else {
+      word.correctCount = (word.correctCount || 0) + 1;
+      word.reviewInterval = Math.min((word.reviewInterval || 1) * 2, 14);
+    }
+
+    word.nextReviewDate = now + (word.reviewInterval * 24 * 60 * 60 * 1000);
+
+    store.put(word);
+  };
+}
 
 
 
