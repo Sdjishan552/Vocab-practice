@@ -1,11 +1,12 @@
-const CACHE_NAME = "vocab-app-v74.0;
+const CACHE_NAME = "vocab-app-v007;
 const STATIC_ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
   "./manifest.json",
-  "./icons/icon.png"
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
 
@@ -53,6 +54,7 @@ self.addEventListener("fetch", event => {
     })
   );
 });
+
 
 
 
