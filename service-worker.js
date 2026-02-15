@@ -1,12 +1,11 @@
 const CACHE_NAME = "vocab-app-v1";
 const STATIC_ASSETS = [
-  "./",
-  "./index.html",
-  "./style.css",
-  "./app.js",
-  "./manifest.json"
+  "/",
+  "/index.html",
+  "/style.css",
+  "/app.js",
+  "/manifest.json"
 ];
-
 // INSTALL
 self.addEventListener("install", event => {
   event.waitUntil(
@@ -51,3 +50,4 @@ self.addEventListener("fetch", event => {
     })
   );
 });
+
