@@ -36,18 +36,29 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   event.respondWith(
     caches.match(event.request).then(cached => {
-      return (
-        cached ||
-        fetch(event.request).then(response => {
-          return caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, response.clone());
+      if (cached) return cached;
+
+      return fetch(event.request)
+        .then(response => {
+          // Only cache successful responses
+          if (!response || response.status !== 200 || response.type !== "basic") {
             return response;
+          }
+
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseToCache);
           });
-        }).catch(() => {
-          return caches.match("./index.html");
+
+          return response;
         })
-      );
+        .catch(() => {
+          // Important: return root index.html so client-side routing works
+          return caches.match("/index.html");
+        });
     })
   );
 });
+});
+
 
