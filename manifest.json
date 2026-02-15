@@ -1,7 +1,7 @@
 {
   "name": "Vocab Practice Engine",
   "short_name": "VocabApp",
-  "start_url": "./",
+"start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0d0d0d",
@@ -21,5 +21,6 @@
 ]
 
 }
+
 
 
