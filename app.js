@@ -1,5 +1,5 @@
 
-
+document.addEventListener("DOMContentLoaded", function () {
   /***********************
     DEBUG SYSTEM
   ************************/
@@ -8,13 +8,16 @@
 
   const debugPanel = document.getElementById("debugPanel");
   const debugLogs = document.getElementById("debugLogs");
-  const debugToggle = document.getElementById("debugToggle");
+const debugToggle = document.getElementById("debugToggle");
 
+if (debugToggle) {
   debugToggle.addEventListener("click", () => {
     debugMode = !debugMode;
     debugPanel.style.display = debugMode ? "block" : "none";
     debugToggle.innerText = debugMode ? "Debug: ON" : "Debug: OFF";
   });
+}
+
 
   function logDebug(message) {
     if (!debugMode) return;
@@ -1061,4 +1064,5 @@ function updateWordStats(wordId, performanceScore) {
 }
 
 
+});
 
