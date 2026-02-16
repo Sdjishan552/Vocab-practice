@@ -184,29 +184,63 @@ initDB();
 const transaction = db.transaction("words", "readwrite");
 const store = transaction.objectStore("words");
 
-jsonData.forEach(row => {
+const getAllRequest = store.getAll();
 
-  const wordObject = {
-    word: row.Word ? row.Word.trim() : "",
-    meanings: row.Meaning
+getAllRequest.onsuccess = function () {
+
+  const existingWords = getAllRequest.result;
+
+  jsonData.forEach(row => {
+
+    const wordText = row.Word ? row.Word.trim() : "";
+    const newMeaningsRaw = row.Meaning
       ? row.Meaning.split(",").map(m => m.trim())
-      : [],
-    wrongCount: 0,
-    correctCount: 0,
-    totalAttempts: 0,
-    lastAsked: null,
-    reviewInterval: 1,
-    nextReviewDate: Date.now(),
-    batchId: batchId,
-    createdAt: new Date()
-  };
+      : [];
 
-  if (wordObject.word !== "") {
-    store.add(wordObject);
-    addedCount++;
-  }
+    if (wordText === "") return;
 
-});
+    // Remove duplicates inside new upload
+    const newMeanings = [...new Set(newMeaningsRaw)];
+
+    // Check if word already exists
+    const existing = existingWords.find(
+      w => w.word.toLowerCase() === wordText.toLowerCase()
+    );
+
+    if (existing) {
+
+      // Merge meanings and keep unique
+      const merged = [...existing.meanings, ...newMeanings];
+      existing.meanings = [...new Set(merged)];
+
+      existing.updatedAt = new Date();
+
+      store.put(existing);
+
+    } else {
+
+      const newWordObject = {
+        word: wordText,
+        meanings: newMeanings,
+        wrongCount: 0,
+        correctCount: 0,
+        totalAttempts: 0,
+        lastAsked: null,
+        reviewInterval: 1,
+        nextReviewDate: Date.now(),
+        batchId: batchId,
+        createdAt: new Date()
+      };
+
+      store.add(newWordObject);
+      addedCount++;
+    }
+
+  });
+
+};
+
+
 
 transaction.oncomplete = function () {
   logDebug("Excel processed. Words added: " + addedCount);
@@ -1155,5 +1189,4 @@ function updateWordStats(wordId, performanceScore) {
 
 
 });
-
 
