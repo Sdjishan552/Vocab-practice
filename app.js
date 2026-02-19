@@ -186,27 +186,61 @@ const store = transaction.objectStore("words");
 
 jsonData.forEach(row => {
 
-  const wordObject = {
-    word: row.Word ? row.Word.trim() : "",
-    meanings: row.Meaning
-      ? row.Meaning.split(",").map(m => m.trim())
-      : [],
-    wrongCount: 0,
-    correctCount: 0,
-    totalAttempts: 0,
-    lastAsked: null,
-    reviewInterval: 1,
-    nextReviewDate: Date.now(),
-    batchId: batchId,
-    createdAt: new Date()
+  const mainWord = row.Word ? row.Word.trim() : "";
+  const newMeanings = row.Meaning
+    ? row.Meaning.split(",").map(m => m.trim())
+    : [];
+
+  if (mainWord === "") return;
+
+  const getRequest = store.index("word").getAll(mainWord);
+
+  getRequest.onsuccess = function () {
+
+    const existingWords = getRequest.result;
+
+    if (existingWords.length > 0) {
+
+      // Merge with first match
+      const existingWord = existingWords[0];
+
+      const existingMeanings = existingWord.meanings || [];
+
+      const mergedMeanings = [
+        ...new Set([
+          ...existingMeanings,
+          ...newMeanings
+        ])
+      ];
+
+      existingWord.meanings = mergedMeanings;
+
+      store.put(existingWord);
+
+    } else {
+
+      const wordObject = {
+        word: mainWord,
+        meanings: [...new Set(newMeanings)],
+        wrongCount: 0,
+        correctCount: 0,
+        totalAttempts: 0,
+        lastAsked: null,
+        reviewInterval: 1,
+        nextReviewDate: Date.now(),
+        batchId: batchId,
+        createdAt: new Date()
+      };
+
+      store.add(wordObject);
+      addedCount++;
+
+    }
+
   };
 
-  if (wordObject.word !== "") {
-    store.add(wordObject);
-    addedCount++;
-  }
-
 });
+
 
 transaction.oncomplete = function () {
   logDebug("Excel processed. Words added: " + addedCount);
@@ -228,6 +262,7 @@ transaction.oncomplete = function () {
   });
 
 let allWordsGlobal = [];
+let meaningToWordMap = {};
 
 /***********************
   QUIZ ENGINE
@@ -279,6 +314,23 @@ function startQuiz(totalQuestions, isExam) {
   getAllWords(function (words) {
 
     allWordsGlobal = words;
+    // ===== BUILD MEANING MAP =====
+
+meaningToWordMap = {};
+
+words.forEach(word => {
+  word.meanings.forEach(meaning => {
+
+    const key = meaning.toLowerCase();
+
+    if (!meaningToWordMap[key]) {
+      meaningToWordMap[key] = [];
+    }
+
+    meaningToWordMap[key].push(word.word);
+
+  });
+});
 
     if (words.length < 5) {
       alert("Not enough words in database.");
@@ -585,12 +637,49 @@ const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
   let wrongSelected = 0;
 
   selected.forEach(option => {
-    if (correctAnswers.includes(option)) {
-      correctSelected++;
-    } else {
-      wrongSelected++;
+
+  const optionLower = option.toLowerCase();
+
+  let isCorrect = false;
+
+  // 1️⃣ Direct match with correct meanings
+  if (correctAnswers.map(ans => ans.toLowerCase()).includes(optionLower)) {
+    isCorrect = true;
+  }
+
+  // 2️⃣ If option is a main word that shares a meaning
+  else {
+
+    const optionWordObj = allWordsGlobal.find(
+      w => w.word.toLowerCase() === optionLower
+    );
+
+    if (optionWordObj) {
+
+      const optionMeanings = optionWordObj.meanings.map(m => m.toLowerCase());
+
+      const correctLower = correctAnswers.map(ans => ans.toLowerCase());
+
+      const hasIntersection = optionMeanings.some(m =>
+        correctLower.includes(m)
+      );
+
+      if (hasIntersection) {
+        isCorrect = true;
+      }
+
     }
-  });
+
+  }
+
+  if (isCorrect) {
+    correctSelected++;
+  } else {
+    wrongSelected++;
+  }
+
+});
+
 
   let questionScore = 0;
 
