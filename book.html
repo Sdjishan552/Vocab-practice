@@ -9,13 +9,27 @@
 <body class="book-page">
 
 <header class="book-header">
-  <h1>📖 Vocabulary Book</h1>
-  <a href="index.html">
-    <button>← Back to Dashboard</button>
-  </a>
+
+  <div class="header-left">
+    <h1>📖 Vocabulary Book</h1>
+  </div>
+
+  <div class="header-center" id="searchNavigator" style="display:none;">
+    <button id="prevMatch">⬅ Prev</button>
+    <span id="matchCounter" style="margin:0 10px;"></span>
+    <button id="nextMatch">Next ➡</button>
+  </div>
+
+  <div class="header-right">
+    <a href="index.html">
+      <button>← Back to Dashboard</button>
+    </a>
+  </div>
+
 </header>
+
+
 <div class="book-filter">
-  <label></label>
   <select id="dateFilter">
     <option value="all">All Words</option>
     <option value="3">Last 3 Days</option>
@@ -23,14 +37,14 @@
     <option value="10">Last 10 Days</option>
     <option value="30">Last 30 Days</option>
   </select>
-   <input type="text" id="searchInput" placeholder="Search word..." class="book-search">
+
+  <input type="text" id="searchInput" placeholder="Search word..." class="book-search">
 </div>
+
+<!-- SEARCH NAVIGATOR -->
+
 
 <div id="bookContainer" class="book-container"></div>
-</div>
-
-
-
 
 <script>
 
@@ -49,19 +63,38 @@ request.onsuccess = function () {
   loadBook("all");
 };
 
-// Filter change event
+// Filter change
 document.getElementById("dateFilter").addEventListener("change", function () {
   loadBook(this.value);
 });
+
+// Search input
 document.getElementById("searchInput").addEventListener("input", function () {
   const filterDays = document.getElementById("dateFilter").value;
   loadBook(filterDays);
 });
 
+// ===== BUILD SEARCH INDEX =====
+function buildSearchIndex(words) {
+  return words.map(word => {
+    const combinedText = (
+      word.word + " " + word.meanings.join(" ")
+    ).toLowerCase();
+
+    return {
+      mainWord: word.word,
+      searchableText: combinedText
+    };
+  });
+}
+
 function loadBook(filterDays) {
 
   const container = document.getElementById("bookContainer");
+  const searchNavigator = document.getElementById("searchNavigator");
+
   container.innerHTML = "";
+  searchNavigator.style.display = "none";
 
   const transaction = db.transaction("words", "readonly");
   const store = transaction.objectStore("words");
@@ -70,29 +103,36 @@ function loadBook(filterDays) {
   req.onsuccess = function () {
 
     let words = req.result;
-    const searchText = document.getElementById("searchInput").value.toLowerCase();
+    const searchText = document.getElementById("searchInput").value.toLowerCase().trim();
 
-if (searchText.trim() !== "") {
-  words = words.filter(word =>
-    word.word.toLowerCase().includes(searchText)
-  );
-}
+    // ===== SEARCH FILTER =====
+    if (searchText !== "") {
+
+      const indexedWords = buildSearchIndex(words);
+
+      const matches = indexedWords.filter(entry =>
+        entry.searchableText.includes(searchText)
+      );
+
+      words = matches.map(entry =>
+        words.find(w => w.word === entry.mainWord)
+      );
+    }
 
     if (!words || words.length === 0) {
-      container.innerHTML = "<p>No words available.</p>";
+      container.innerHTML = "<p>No words found.</p>";
       return;
     }
 
-    // ===== FILTER LOGIC =====
+    // ===== DATE FILTER =====
     if (filterDays !== "all") {
-
       const days = parseInt(filterDays);
       const now = Date.now();
       const cutoff = now - (days * 24 * 60 * 60 * 1000);
 
-      words = words.filter(word => {
-        return new Date(word.createdAt).getTime() >= cutoff;
-      });
+      words = words.filter(word =>
+        new Date(word.createdAt).getTime() >= cutoff
+      );
     }
 
     if (words.length === 0) {
@@ -100,7 +140,7 @@ if (searchText.trim() !== "") {
       return;
     }
 
-    // Sort alphabetically
+    // ===== SORT ALPHABETICALLY =====
     words.sort((a, b) => a.word.localeCompare(b.word));
 
     let currentLetter = "";
@@ -132,13 +172,62 @@ if (searchText.trim() !== "") {
 
       container.appendChild(card);
     });
+
+    // ===== SEARCH NAVIGATION (AFTER RENDERING) =====
+    if (searchText !== "") {
+
+      const matchedElements = Array.from(
+        document.querySelectorAll(".book-word")
+      );
+
+      if (matchedElements.length > 0) {
+
+        let currentMatchIndex = 0;
+
+        searchNavigator.style.display = "block";
+
+        function highlightMatch(index) {
+
+          matchedElements.forEach(el =>
+            el.classList.remove("active-match")
+          );
+
+          const element = matchedElements[index];
+          element.classList.add("active-match");
+
+          const containerTop = container.getBoundingClientRect().top;
+const elementTop = element.getBoundingClientRect().top;
+
+container.scrollBy({
+  top: elementTop - containerTop - 100,
+  behavior: "smooth"
+});
+
+
+          document.getElementById("matchCounter").innerText =
+            `${index + 1} / ${matchedElements.length}`;
+        }
+
+        highlightMatch(0);
+
+        document.getElementById("nextMatch").onclick = function () {
+          currentMatchIndex =
+            (currentMatchIndex + 1) % matchedElements.length;
+          highlightMatch(currentMatchIndex);
+        };
+
+        document.getElementById("prevMatch").onclick = function () {
+          currentMatchIndex =
+            (currentMatchIndex - 1 + matchedElements.length) %
+            matchedElements.length;
+          highlightMatch(currentMatchIndex);
+        };
+      }
+    }
   };
 }
 
 </script>
-
-
-
 
 </body>
 </html>
