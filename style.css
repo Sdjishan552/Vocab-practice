@@ -682,4 +682,46 @@ body.book-page {
   padding: 6px 12px;
   margin: 0 5px;
 }
+/* ===== Upload Chart ===== */
 
+.upload-chart {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 180px;
+  margin-top: 20px;
+  gap: 10px;
+}
+
+.upload-bar-wrapper {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.upload-bar {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 6px 6px 0 0;
+  transition: height 0.3s ease;
+}
+
+.upload-count {
+  font-size: 12px;
+  margin-top: 4px;
+  color: var(--text-main);
+}
+
+.upload-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.upload-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  white-space: nowrap;
+}
