@@ -965,15 +965,21 @@ wordReq.onsuccess = function () {
 
     const key = date.toISOString().split("T")[0];
 
-    last7Days.push({
+    const weekday = date.toLocaleDateString(undefined, {
+  weekday: "short"
+});
+
+const dayMonth = date.toLocaleDateString(undefined, {
+  day: "numeric",
+  month: "short"
+});
+
+last7Days.push({
   date: key,
-  label: date.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short"
-  }),
+  label: `${weekday}<br>${dayMonth}`,
   count: 0
 });
+
 
   }
 
@@ -998,7 +1004,7 @@ wordReq.onsuccess = function () {
       <div class="upload-bar-wrapper">
         <div class="upload-bar" style="height:${heightPercent}%"></div>
         <span class="upload-count">${day.count}</span>
-        <span class="upload-label">${day.label}</span>
+<span class="upload-label">${day.label}</span>
       </div>
     `;
   }).join("");
