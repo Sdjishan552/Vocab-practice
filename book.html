@@ -69,7 +69,14 @@ function loadBook(filterDays) {
 
   req.onsuccess = function () {
 
-    let words = req.result;
+    
+    words = words.map(word => {
+  if (!word.createdAt) {
+    word.createdAt = new Date();
+  }
+  return word;
+});
+
     const searchText = document.getElementById("searchInput").value.toLowerCase();
 
 if (searchText.trim() !== "") {
@@ -91,8 +98,15 @@ if (searchText.trim() !== "") {
       const cutoff = now - (days * 24 * 60 * 60 * 1000);
 
       words = words.filter(word => {
-        return new Date(word.createdAt).getTime() >= cutoff;
-      });
+
+  const wordDate = word.updatedAt || word.createdAt;
+
+  if (!wordDate) return false;
+
+  return new Date(wordDate).getTime() >= cutoff;
+
+});
+
     }
 
     if (words.length === 0) {
@@ -142,3 +156,4 @@ if (searchText.trim() !== "") {
 
 </body>
 </html>
+
