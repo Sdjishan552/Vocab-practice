@@ -237,7 +237,8 @@ else {
         reviewInterval: 1,
         nextReviewDate: Date.now(),
         batchId: batchId,
-        createdAt: new Date()
+        createdAt: Date.now()
+
       };
 
       store.add(newWordObject);
@@ -1197,5 +1198,6 @@ function updateWordStats(wordId, performanceScore) {
 
 
 });
+
 
 
