@@ -891,7 +891,7 @@ function loadSessionAnalytics() {
       noSession.innerText = "No sessions yet.";
       noSession.style.marginTop = "20px";
       container.appendChild(noSession);
-      return;
+    ;
     }
 
     const practiceSessions = sessions.filter(s => s.mode === "practice");
@@ -942,6 +942,74 @@ function loadSessionAnalytics() {
     `;
 
     container.appendChild(analyticsGrid);
+    // ===== LAST 7 DAYS UPLOAD CHART =====
+
+const chartContainer = document.getElementById("uploadChartContainer");
+chartContainer.innerHTML = "<h3>📊 Words Uploaded (Last 7 Days)</h3>";
+
+const wordTx = db.transaction("words", "readonly");
+const wordStore = wordTx.objectStore("words");
+const wordReq = wordStore.getAll();
+
+wordReq.onsuccess = function () {
+
+  const words = wordReq.result;
+  const today = new Date();
+
+  // Prepare last 7 days map
+  const last7Days = [];
+
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(today.getDate() - i);
+
+    const key = date.toISOString().split("T")[0];
+
+    last7Days.push({
+  date: key,
+  label: date.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short"
+  }),
+  count: 0
+});
+
+  }
+
+  // Count words per day
+  words.forEach(word => {
+    const created = new Date(word.createdAt).toISOString().split("T")[0];
+
+    const dayObj = last7Days.find(d => d.date === created);
+    if (dayObj) {
+      dayObj.count++;
+    }
+  });
+
+  // Find max count for scaling
+  const maxCount = Math.max(...last7Days.map(d => d.count), 1);
+
+  const chartHTML = last7Days.map(day => {
+
+    const heightPercent = (day.count / maxCount) * 100;
+
+    return `
+      <div class="upload-bar-wrapper">
+        <div class="upload-bar" style="height:${heightPercent}%"></div>
+        <span class="upload-count">${day.count}</span>
+        <span class="upload-label">${day.label}</span>
+      </div>
+    `;
+  }).join("");
+
+  chartContainer.innerHTML += `
+    <div class="upload-chart">
+      ${chartHTML}
+    </div>
+  `;
+};
+
   };
 }
 
@@ -1244,5 +1312,4 @@ function updateWordStats(wordId, performanceScore) {
 
 
 });
-
 
