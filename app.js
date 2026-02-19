@@ -184,72 +184,29 @@ initDB();
 const transaction = db.transaction("words", "readwrite");
 const store = transaction.objectStore("words");
 
-const getAllRequest = store.getAll();
+jsonData.forEach(row => {
 
-getAllRequest.onsuccess = function () {
-
-  const existingWords = getAllRequest.result;
-
-  jsonData.forEach(row => {
-
-    const wordText = row.Word ? row.Word.trim() : "";
-    const newMeaningsRaw = row.Meaning
+  const wordObject = {
+    word: row.Word ? row.Word.trim() : "",
+    meanings: row.Meaning
       ? row.Meaning.split(",").map(m => m.trim())
-      : [];
+      : [],
+    wrongCount: 0,
+    correctCount: 0,
+    totalAttempts: 0,
+    lastAsked: null,
+    reviewInterval: 1,
+    nextReviewDate: Date.now(),
+    batchId: batchId,
+    createdAt: new Date()
+  };
 
-    if (wordText === "") return;
-
-    // Remove duplicates inside new upload
-    const newMeanings = [...new Set(newMeaningsRaw)];
-
-    // Check if word already exists
-    const existing = existingWords.find(
-      w => w.word.toLowerCase() === wordText.toLowerCase()
-    );
-
-    if (existing) {
-
-  // Merge meanings and keep unique
-  const merged = [...existing.meanings, ...newMeanings];
-  existing.meanings = [...new Set(merged)];
-
-  const now = new Date();
-
-  existing.updatedAt = now;
-
-  // 🔥 ALSO update createdAt if missing (safety)
-  if (!existing.createdAt) {
-    existing.createdAt = now;
+  if (wordObject.word !== "") {
+    store.add(wordObject);
+    addedCount++;
   }
 
-  store.put(existing);
-
-}
-else {
-
-      const newWordObject = {
-        word: wordText,
-        meanings: newMeanings,
-        wrongCount: 0,
-        correctCount: 0,
-        totalAttempts: 0,
-        lastAsked: null,
-        reviewInterval: 1,
-        nextReviewDate: Date.now(),
-        batchId: batchId,
-        createdAt: Date.now()
-
-      };
-
-      store.add(newWordObject);
-      addedCount++;
-    }
-
-  });
-
-};
-
-
+});
 
 transaction.oncomplete = function () {
   logDebug("Excel processed. Words added: " + addedCount);
@@ -1198,6 +1155,5 @@ function updateWordStats(wordId, performanceScore) {
 
 
 });
-
 
 
