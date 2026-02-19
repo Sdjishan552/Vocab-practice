@@ -209,15 +209,23 @@ getAllRequest.onsuccess = function () {
 
     if (existing) {
 
-      // Merge meanings and keep unique
-      const merged = [...existing.meanings, ...newMeanings];
-      existing.meanings = [...new Set(merged)];
+  // Merge meanings and keep unique
+  const merged = [...existing.meanings, ...newMeanings];
+  existing.meanings = [...new Set(merged)];
 
-      existing.updatedAt = new Date();
+  const now = new Date();
 
-      store.put(existing);
+  existing.updatedAt = now;
 
-    } else {
+  // 🔥 ALSO update createdAt if missing (safety)
+  if (!existing.createdAt) {
+    existing.createdAt = now;
+  }
+
+  store.put(existing);
+
+}
+else {
 
       const newWordObject = {
         word: wordText,
@@ -1189,4 +1197,5 @@ function updateWordStats(wordId, performanceScore) {
 
 
 });
+
 
