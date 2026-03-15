@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", function () {
 
   function logDebug(message) {
@@ -100,7 +99,7 @@ request.onsuccess = function () {
     document.getElementById("startWeakMode").disabled = false;
     document.getElementById("uploadBtn").disabled = false;
 
-    // 🔥 Always refresh analytics once DB is ready
+    // Always refresh analytics once DB is ready
     loadSessionAnalytics();
   };
 }
@@ -430,9 +429,25 @@ function startWeakDrill(totalQuestions) {
 
   getAllWords(function (words) {
 
-    examMode = false; // Drill behaves like practice
+    allWordsGlobal = words;
+
+    // ===== BUILD MEANING MAP (FIX 4) =====
+    meaningToWordMap = {};
+    words.forEach(word => {
+      word.meanings.forEach(meaning => {
+        const key = meaning.toLowerCase();
+        if (!meaningToWordMap[key]) {
+          meaningToWordMap[key] = [];
+        }
+        meaningToWordMap[key].push(word.word);
+      });
+    });
+
+    examMode = false;
     score = 0;
     currentIndex = 0;
+    sessionResults = []; // FIX 4: initialize sessionResults
+    quizStartTime = Date.now(); // FIX 4: track start time
 
     // Sort by wrongCount descending
     const sortedByWeakness = [...words]
@@ -457,8 +472,11 @@ function renderQuestion() {
     return;
   }
 
-  const container = document.getElementById("focusContent");
+  // FIX 5: Clear timer BEFORE wiping container so ghost tick cannot fire on stale element
+  clearInterval(timerInterval);
+  timerInterval = null;
 
+  const container = document.getElementById("focusContent");
 
   container.innerHTML = "";
 // ===== EXIT BUTTON =====
@@ -545,40 +563,34 @@ function generateOptions(question) {
 
   const possibleMax = Math.min(maxCorrectAllowed, shuffledCorrect.length);
 
-  // 🎯 Weighted Probability Logic
-  // 🎯 Dynamic Difficulty Based on Performance
+  // Dynamic Difficulty Based on Performance
+  const accuracy = calculateAccuracy(question);
 
-const accuracy = calculateAccuracy(question);
+  let numberOfCorrect;
+  const rand = Math.random();
 
-let numberOfCorrect;
-const rand = Math.random();
-
-if (accuracy < 50) {
-  // Weak word → Easier
-  if (rand < 0.85) numberOfCorrect = 1;
-  else numberOfCorrect = 2;
-}
-
-else if (accuracy < 80) {
-  // Medium word → Balanced
-  if (rand < 0.6) numberOfCorrect = 1;
-  else if (rand < 0.9) numberOfCorrect = 2;
-  else numberOfCorrect = 3;
-}
-
-else {
-  // Strong word → Harder
-  if (rand < 0.3) numberOfCorrect = 1;
-  else if (rand < 0.7) numberOfCorrect = 2;
-  else numberOfCorrect = 3;
-}
-
+  if (accuracy < 50) {
+    if (rand < 0.85) numberOfCorrect = 1;
+    else numberOfCorrect = 2;
+  }
+  else if (accuracy < 80) {
+    if (rand < 0.6) numberOfCorrect = 1;
+    else if (rand < 0.9) numberOfCorrect = 2;
+    else numberOfCorrect = 3;
+  }
+  else {
+    if (rand < 0.3) numberOfCorrect = 1;
+    else if (rand < 0.7) numberOfCorrect = 2;
+    else numberOfCorrect = 3;
+  }
 
   numberOfCorrect = Math.min(numberOfCorrect, possibleMax);
 
   const correctToUse = shuffledCorrect.slice(0, numberOfCorrect);
 
-  // Build incorrect pool
+  // ===== FIX 1: Build incorrect pool excluding ANY meaning of the current question =====
+  const currentWordMeaningsLower = question.meanings.map(m => m.toLowerCase());
+
   const otherWords = allWordsGlobal.filter(
     w => w.word !== question.word
   );
@@ -587,7 +599,10 @@ else {
 
   otherWords.forEach(w => {
     w.meanings.forEach(m => {
-      incorrectPool.push(m);
+      // FIX 1: Skip if this meaning overlaps with any correct meaning of current word
+      if (!currentWordMeaningsLower.includes(m.toLowerCase())) {
+        incorrectPool.push(m);
+      }
     });
   });
 
@@ -612,15 +627,9 @@ else {
 }
 
 
-
-
-
-
-
 function checkAnswer() {
 
   const container = document.getElementById("focusContent");
-
 
   const checkboxes = container.querySelectorAll("input[type='checkbox']");
   const selected = [];
@@ -683,34 +692,37 @@ const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
 
   let questionScore = 0;
 
-  // 🚫 Nothing selected
+  // Nothing selected
   if (selected.length === 0) {
     questionScore = 0;
   }
 
-  // ❌ Any wrong selected
+  // Any wrong selected
   else if (wrongSelected > 0) {
     questionScore = examMode ? -0.25 : 0;
   }
 
-  // ✅ Only correct selected
+  // Only correct selected
   else {
     questionScore = correctSelected / totalCorrect;
   }
 
   score += questionScore;
 
-updateWordStats(currentWordId, questionScore);
-// Store session result
-sessionResults.push({
-  word: currentQuestions[currentIndex].word,
-  correctAnswers: correctAnswers,
-  selectedAnswers: selected,
-  isCorrect: questionScore > 0,
-});
+  updateWordStats(currentWordId, questionScore);
+
+  // FIX 3: isCorrect only true if ALL correct answers were selected and nothing wrong
+  const fullyCorrect = (wrongSelected === 0 && correctSelected === totalCorrect);
+
+  sessionResults.push({
+    word: currentQuestions[currentIndex].word,
+    correctAnswers: correctAnswers,
+    selectedAnswers: selected,
+    isCorrect: fullyCorrect,
+  });
 
 
-  // 🔵 PRACTICE MODE VISUAL FEEDBACK
+  // PRACTICE MODE VISUAL FEEDBACK
   if (!examMode) {
 
     checkboxes.forEach(cb => {
@@ -728,17 +740,13 @@ sessionResults.push({
     });
 
     // Update score display
-    if (!examMode) {
-  const infoBar = container.firstChild;
-  infoBar.innerText =
-    `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
-}
-
+    const infoBar = container.firstChild;
+    infoBar.innerText =
+      `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
 
     // Disable submit
-const submitBtn = container.querySelector(".submit-btn");
-if (submitBtn) submitBtn.disabled = true;
-
+    const submitBtn = container.querySelector(".submit-btn");
+    if (submitBtn) submitBtn.disabled = true;
 
     setTimeout(() => {
       currentIndex++;
@@ -746,9 +754,10 @@ if (submitBtn) submitBtn.disabled = true;
     }, 1500);
 
   } else {
-    // 🔴 EXAM MODE → No color feedback
+    // EXAM MODE → No color feedback
     currentIndex++;
-    clearInterval(timerInterval);
+    clearInterval(timerInterval); // FIX 5: clear timer on manual submit
+    timerInterval = null;
     renderQuestion();
   }
 }
@@ -757,15 +766,16 @@ if (submitBtn) submitBtn.disabled = true;
 
 function startTimer(displayElement) {
 
-  // Stop any previous timer
+  // FIX 5: Stop any previous timer first
   clearInterval(timerInterval);
+  timerInterval = null;
 
   // Reset time for EACH question
   timeLeft = parseInt(document.getElementById("examTimerInput").value);
 
   // Safety check
   if (isNaN(timeLeft) || timeLeft <= 0) {
-    timeLeft = 10; // default fallback
+    timeLeft = 10;
   }
 
   displayElement.innerText = "Time Left: " + timeLeft;
@@ -774,8 +784,16 @@ function startTimer(displayElement) {
 
     timeLeft--;
 
+    // FIX 5: Guard — if element no longer in DOM, kill timer immediately
+    if (!document.body.contains(displayElement)) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      return;
+    }
+
     if (timeLeft <= 0) {
       clearInterval(timerInterval);
+      timerInterval = null;
       displayElement.innerText = "Time Left: 0";
       currentIndex++;
       renderQuestion();
@@ -891,7 +909,6 @@ function loadSessionAnalytics() {
       noSession.innerText = "No sessions yet.";
       noSession.style.marginTop = "20px";
       container.appendChild(noSession);
-    ;
     }
 
     const practiceSessions = sessions.filter(s => s.mode === "practice");
@@ -1020,9 +1037,6 @@ last7Days.push({
 }
 
 
-
-
-
 function updateLastAsked(wordId) {
 
   const transaction = db.transaction("words", "readwrite");
@@ -1071,6 +1085,7 @@ function enterFocusMode() {
 function endQuiz() {
 
   clearInterval(timerInterval);
+  timerInterval = null;
   quizEndTime = Date.now();
 
   const container = document.getElementById("focusContent");
@@ -1201,6 +1216,9 @@ function endQuiz() {
 }
 
 function exitFocusMode() {
+  clearInterval(timerInterval); // FIX 5: kill timer on manual exit too
+  timerInterval = null;
+
   const focus = document.getElementById("focusMode");
 
   focus.classList.remove("active");
@@ -1311,11 +1329,4 @@ function updateWordStats(wordId, performanceScore) {
   };
 }
 
-
-
-
-
-
-
 });
-
