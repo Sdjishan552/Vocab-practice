@@ -51,30 +51,39 @@ const request = indexedDB.open("VocabDB", 3);
     db = event.target.result;
 
     // WORDS STORE
-    if (!db.objectStoreNames.contains("words")) {
-      // Add note field to existing words (migration safety)
-      const transaction = event.target.transaction;
-      const store = transaction.objectStore("words");
+    // WORDS STORE
+// WORDS STORE
+// WORDS STORE
+// WORDS STORE
+if (!db.objectStoreNames.contains("words")) {
 
-      store.openCursor().onsuccess = function (e) {
-        const cursor = e.target.result;
-        if (cursor) {
-          const value = cursor.value;
-          if (value.note === undefined) {
-            value.note = "";
-            cursor.update(value);
-          }
-          cursor.continue();
-        }
-      };
-      const wordsStore = db.createObjectStore("words", {
-        keyPath: "id",
-        autoIncrement: true
-      });
+  const wordsStore = db.createObjectStore("words", {
+    keyPath: "id",
+    autoIncrement: true
+  });
 
-      wordsStore.createIndex("word", "word", { unique: false });
-      wordsStore.createIndex("batchId", "batchId", { unique: false });
+  wordsStore.createIndex("word", "word", { unique: false });
+  wordsStore.createIndex("batchId", "batchId", { unique: false });
+
+} else {
+
+  // ✅ Migration for existing DB
+  const transaction = event.target.transaction;
+  const store = transaction.objectStore("words");
+
+  store.openCursor().onsuccess = function (e) {
+    const cursor = e.target.result;
+    if (cursor) {
+      const value = cursor.value;
+      if (value.note === undefined) {
+        value.note = "";
+        cursor.update(value);
+      }
+      cursor.continue();
     }
+  };
+
+}
 
     // SESSIONS STORE
     if (!db.objectStoreNames.contains("sessions")) {
@@ -85,7 +94,7 @@ const request = indexedDB.open("VocabDB", 3);
     }
 
     logDebug("Database structure created");
-  };
+}; 
 
 request.onsuccess = function () {
 
@@ -229,10 +238,11 @@ jsonData.forEach(row => {
 
       existingWord.meanings = mergedMeanings;
       if (newPhonetics && !existingWord.phonetics) {
-        if (newNote) {
-          existingWord.note = newNote;
-            }
         existingWord.phonetics = newPhonetics;
+      }
+
+      if (newNote) {
+        existingWord.note = newNote;
       }
 
       store.put(existingWord);
@@ -243,7 +253,7 @@ jsonData.forEach(row => {
   word: mainWord,
   meanings: [...new Set(newMeanings)],
   phonetics: newPhonetics,
-  note: "", // ✅ NEW FIELD
+  note: newNote || "",
   wrongCount: 0,
   correctCount: 0,
   totalAttempts: 0,
