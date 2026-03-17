@@ -1053,6 +1053,11 @@ function loadSessionAnalytics() {
 function loadBookMode() {
 
   const container = document.getElementById("bookContainer");
+
+  if (!container) {
+    console.error("bookContainer not found in HTML");
+    return;
+  }
   container.innerHTML = "";
 
   getAllWords(function (words) {
@@ -1066,7 +1071,7 @@ function loadBookMode() {
 
       const wordCard = document.createElement("div");
       wordCard.className = "word-card";
-
+      wordCard.style.position = "relative";
       // ✏️ NOTE BUTTON
       const noteBtn = document.createElement("button");
       noteBtn.innerText = "✏️";
@@ -1101,6 +1106,7 @@ function loadBookMode() {
         const noteDiv = document.createElement("div");
         noteDiv.className = "note-display";
         noteDiv.innerText = "📝 " + word.note;
+        noteDiv.style.whiteSpace = "pre-wrap";
         wordCard.appendChild(noteDiv);
       }
 
