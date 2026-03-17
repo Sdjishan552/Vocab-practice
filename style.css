@@ -754,3 +754,27 @@ body.book-page {
   border-left: 4px solid #ffc107;
   font-size: 14px;
 }
+.word-card {
+  position: relative;
+  padding: 12px;
+  margin: 10px 0;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
+.note-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #ffc107;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.note-display {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #555;
+}
