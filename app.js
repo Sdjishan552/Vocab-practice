@@ -42,8 +42,7 @@ function initDB() {
   document.getElementById("startWeakMode").disabled = true;
   document.getElementById("uploadBtn").disabled = true;
 
-const request = indexedDB.open("VocabDB", 2);
-
+const request = indexedDB.open("VocabDB", 3);
   request.onerror = function () {
     logDebug("Database failed to open");
   };
@@ -53,6 +52,21 @@ const request = indexedDB.open("VocabDB", 2);
 
     // WORDS STORE
     if (!db.objectStoreNames.contains("words")) {
+      // Add note field to existing words (migration safety)
+      const transaction = event.target.transaction;
+      const store = transaction.objectStore("words");
+
+      store.openCursor().onsuccess = function (e) {
+        const cursor = e.target.result;
+        if (cursor) {
+          const value = cursor.value;
+          if (value.note === undefined) {
+            value.note = "";
+            cursor.update(value);
+          }
+          cursor.continue();
+        }
+      };
       const wordsStore = db.createObjectStore("words", {
         keyPath: "id",
         autoIncrement: true
@@ -190,7 +204,7 @@ jsonData.forEach(row => {
     ? row.Meaning.split(",").map(m => m.trim())
     : [];
   const newPhonetics = row.Phonetics ? row.Phonetics.trim() : "";
-
+  const newNote = row.Note ? row.Note.trim() : "";
   if (mainWord === "") return;
 
   const getRequest = store.index("word").getAll(mainWord);
@@ -215,6 +229,9 @@ jsonData.forEach(row => {
 
       existingWord.meanings = mergedMeanings;
       if (newPhonetics && !existingWord.phonetics) {
+        if (newNote) {
+          existingWord.note = newNote;
+            }
         existingWord.phonetics = newPhonetics;
       }
 
@@ -223,18 +240,19 @@ jsonData.forEach(row => {
     } else {
 
       const wordObject = {
-        word: mainWord,
-        meanings: [...new Set(newMeanings)],
-        phonetics: newPhonetics,
-        wrongCount: 0,
-        correctCount: 0,
-        totalAttempts: 0,
-        lastAsked: null,
-        reviewInterval: 1,
-        nextReviewDate: Date.now(),
-        batchId: batchId,
-        createdAt: new Date()
-      };
+  word: mainWord,
+  meanings: [...new Set(newMeanings)],
+  phonetics: newPhonetics,
+  note: "", // ✅ NEW FIELD
+  wrongCount: 0,
+  correctCount: 0,
+  totalAttempts: 0,
+  lastAsked: null,
+  reviewInterval: 1,
+  nextReviewDate: Date.now(),
+  batchId: batchId,
+  createdAt: new Date()
+};
 
       store.add(wordObject);
       addedCount++;
@@ -1289,10 +1307,11 @@ function exportAllData() {
     }
 
     const rows = words.map(w => ({
-      Word: w.word,
-      Meaning: (w.meanings || []).join(", "),
-      Phonetics: w.phonetics || ""
-    }));
+  Word: w.word,
+  Meaning: (w.meanings || []).join(", "),
+  Phonetics: w.phonetics || "",
+  Note: w.note || "" // ✅ NEW COLUMN
+}));
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
