@@ -533,7 +533,6 @@ if (question.phonetics) {
   container.appendChild(phonDiv);
 }
 
-
   // Timer (exam only)
   if (examMode) {
     const timerDisplay = document.createElement("div");
@@ -872,6 +871,7 @@ function showAnalytics(container) {
     container.appendChild(analyticsDiv);
   });
 }
+
 function calculateAccuracy(word) {
   const total = word.totalAttempts || 0;
   if (total === 0) return 0;
@@ -972,79 +972,78 @@ function loadSessionAnalytics() {
     `;
 
     container.appendChild(analyticsGrid);
+
     // ===== LAST 7 DAYS UPLOAD CHART =====
 
-const chartContainer = document.getElementById("uploadChartContainer");
-chartContainer.innerHTML = "<h3>📊 Words Uploaded (Last 7 Days)</h3>";
+    const chartContainer = document.getElementById("uploadChartContainer");
+    chartContainer.innerHTML = "<h3>📊 Words Uploaded (Last 7 Days)</h3>";
 
-const wordTx = db.transaction("words", "readonly");
-const wordStore = wordTx.objectStore("words");
-const wordReq = wordStore.getAll();
+    const wordTx = db.transaction("words", "readonly");
+    const wordStore = wordTx.objectStore("words");
+    const wordReq = wordStore.getAll();
 
-wordReq.onsuccess = function () {
+    wordReq.onsuccess = function () {
 
-  const words = wordReq.result;
-  const today = new Date();
+      const words = wordReq.result;
+      const today = new Date();
 
-  // Prepare last 7 days map
-  const last7Days = [];
+      // Prepare last 7 days map
+      const last7Days = [];
 
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(today.getDate() - i);
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(today.getDate() - i);
 
-    const key = date.toISOString().split("T")[0];
+        const key = date.toISOString().split("T")[0];
 
-    const weekday = date.toLocaleDateString(undefined, {
-  weekday: "short"
-});
+        const weekday = date.toLocaleDateString(undefined, {
+          weekday: "short"
+        });
 
-const dayMonth = date.toLocaleDateString(undefined, {
-  day: "numeric",
-  month: "short"
-});
+        const dayMonth = date.toLocaleDateString(undefined, {
+          day: "numeric",
+          month: "short"
+        });
 
-last7Days.push({
-  date: key,
-  label: `${weekday}<br>${dayMonth}`,
-  count: 0
-});
+        last7Days.push({
+          date: key,
+          label: `${weekday}<br>${dayMonth}`,
+          count: 0
+        });
+      }
 
+      // Count words per day
+      words.forEach(word => {
+        const created = new Date(word.createdAt).toISOString().split("T")[0];
 
-  }
+        const dayObj = last7Days.find(d => d.date === created);
+        if (dayObj) {
+          dayObj.count++;
+        }
+      });
 
-  // Count words per day
-  words.forEach(word => {
-    const created = new Date(word.createdAt).toISOString().split("T")[0];
+      // Find max count for scaling
+      const maxCount = Math.max(...last7Days.map(d => d.count), 1);
 
-    const dayObj = last7Days.find(d => d.date === created);
-    if (dayObj) {
-      dayObj.count++;
-    }
-  });
+      const chartHTML = last7Days.map(day => {
 
-  // Find max count for scaling
-  const maxCount = Math.max(...last7Days.map(d => d.count), 1);
+        const heightPercent = (day.count / maxCount) * 100;
 
-  const chartHTML = last7Days.map(day => {
+        return `
+          <div class="upload-bar-wrapper">
+            <div class="upload-bar" style="height:${heightPercent}%"></div>
+            <span class="upload-count">${day.count}</span>
+            <span class="upload-label">${day.label}</span>
+          </div>
+        `;
+      }).join("");
 
-    const heightPercent = (day.count / maxCount) * 100;
-
-    return `
-      <div class="upload-bar-wrapper">
-        <div class="upload-bar" style="height:${heightPercent}%"></div>
-        <span class="upload-count">${day.count}</span>
-<span class="upload-label">${day.label}</span>
-      </div>
-    `;
-  }).join("");
-
-  chartContainer.innerHTML += `
-    <div class="upload-chart">
-      ${chartHTML}
-    </div>
-  `;
-};
+      chartContainer.innerHTML += `
+        <div class="upload-chart">
+          ${chartHTML}
+        </div>
+      `;
+    };
 
   };
 }
@@ -1244,6 +1243,7 @@ function exitFocusMode() {
 setTimeout(() => {
   loadSessionAnalytics();
 }, 500);
+
 function masterDeleteAllData() {
 
   const password = prompt("Enter Master Password:");
@@ -1305,6 +1305,7 @@ function exportAllData() {
 
 document.getElementById("exportBtn")
   .addEventListener("click", exportAllData);
+
 // ===== THEME SYSTEM =====
 
 const themeBtn = document.getElementById("themeToggleBtn");
@@ -1332,6 +1333,7 @@ themeBtn.addEventListener("click", function () {
   }
 
 });
+
 function updateWordStats(wordId, performanceScore) {
 
   const transaction = db.transaction("words", "readwrite");
