@@ -169,19 +169,28 @@ initDB();
   ************************/
 
   document.getElementById("uploadBtn").addEventListener("click", function () {
+    document.getElementById("loadingIndicator").style.display = "block";
+    document.getElementById("uploadBtn").disabled = true;
     const fileInput = document.getElementById("excelFile");
     const file = fileInput.files[0];
 
     if (!file) {
       alert("Please select an Excel file.");
+
+      document.getElementById("loadingIndicator").style.display = "none";
+      document.getElementById("uploadBtn").disabled = false;
+
       return;
     }
 
     if (!db) {
       alert("Database not ready yet. Please refresh.");
+
+      document.getElementById("loadingIndicator").style.display = "none";
+      document.getElementById("uploadBtn").disabled = false;
+
       return;
     }
-
     const reader = new FileReader();
 
     reader.onload = function (e) {
@@ -196,7 +205,11 @@ initDB();
 
         if (jsonData.length === 0) {
           alert("Excel file is empty or invalid format.");
-          return;
+
+          document.getElementById("loadingIndicator").style.display = "none";
+          document.getElementById("uploadBtn").disabled = false;
+
+        return;
         }
 
         const batchId = new Date().toISOString();
@@ -281,13 +294,18 @@ transaction.oncomplete = function () {
     "Upload successful! Words saved to database.";
 
   loadSessionAnalytics();
+  document.getElementById("loadingIndicator").style.display = "none";
+  document.getElementById("uploadBtn").disabled = false;
 };
 
         fileInput.value = "";
 
-      } catch (error) {
-        logDebug("Excel Processing Error: " + error.message);
-      }
+      }catch (error) {
+  logDebug("Excel Processing Error: " + error.message);
+
+  document.getElementById("loadingIndicator").style.display = "none";
+  document.getElementById("uploadBtn").disabled = false;
+}
     };
 
     reader.readAsArrayBuffer(file);
@@ -1298,6 +1316,7 @@ function masterDeleteAllData() {
 
     // Refresh analytics after deletion
     loadSessionAnalytics();
+    
   };
 
   transaction.onerror = function () {
