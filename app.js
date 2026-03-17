@@ -189,6 +189,7 @@ jsonData.forEach(row => {
   const newMeanings = row.Meaning
     ? row.Meaning.split(",").map(m => m.trim())
     : [];
+  const newPhonetics = row.Phonetics ? row.Phonetics.trim() : "";
 
   if (mainWord === "") return;
 
@@ -213,6 +214,9 @@ jsonData.forEach(row => {
       ];
 
       existingWord.meanings = mergedMeanings;
+      if (newPhonetics && !existingWord.phonetics) {
+        existingWord.phonetics = newPhonetics;
+      }
 
       store.put(existingWord);
 
@@ -221,6 +225,7 @@ jsonData.forEach(row => {
       const wordObject = {
         word: mainWord,
         meanings: [...new Set(newMeanings)],
+        phonetics: newPhonetics,
         wrongCount: 0,
         correctCount: 0,
         totalAttempts: 0,
@@ -519,6 +524,14 @@ if (examMode) {
 }
 
 container.appendChild(title);
+
+// Phonetics badge (below the word)
+if (question.phonetics) {
+  const phonDiv = document.createElement("div");
+  phonDiv.className = "phonetics-badge";
+  phonDiv.innerText = question.phonetics;
+  container.appendChild(phonDiv);
+}
 
 
   // Timer (exam only)
