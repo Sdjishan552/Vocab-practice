@@ -3,7 +3,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function logDebug(message) {
     console.log("[DEBUG]:", message);
   }
-
+ 
 
   /***********************
     SECTION SWITCHING
