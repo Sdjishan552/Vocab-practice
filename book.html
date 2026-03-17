@@ -54,7 +54,8 @@ if (savedTheme === "light") {
 
 let db;
 
-const request = indexedDB.open("VocabDB", 3);
+const request = indexedDB.open("VocabDB", 2);
+
 request.onupgradeneeded = function (event) {
   const d = event.target.result;
   if (!d.objectStoreNames.contains("words")) {
@@ -175,46 +176,12 @@ function loadBook(filterDays) {
         .join("");
 
       card.innerHTML = `
-  <div class="word-header">
-    <h3>${wordObj.word}</h3>
-    <button class="edit-note-btn">✏️</button>
-  </div>
-
-  ${wordObj.phonetics ? `<div class="phonetics-badge">${wordObj.phonetics}</div>` : ""}
-
-  <ul>${meanings}</ul>
-
-  <div class="note-box">
-  <strong>🧠 Note:</strong> 
-  ${wordObj.note ? wordObj.note : "<em>No note added</em>"}
-</div>
-`;
+        <h3>${wordObj.word}</h3>
+        ${wordObj.phonetics ? `<div class="phonetics-badge">${wordObj.phonetics}</div>` : ""}
+        <ul>${meanings}</ul>
+      `;
 
       container.appendChild(card);
-      const editBtn = card.querySelector(".edit-note-btn");
-
-editBtn.onclick = function () {
-
-  const newNote = prompt("Write your note for this word:", wordObj.note || "");
-
-if (newNote === null) return;
-
-const cleanedNote = newNote.trim();
-
-if (cleanedNote === "") {
-  wordObj.note = "";
-} else {
-  wordObj.note = cleanedNote;
-}
-  const transaction = db.transaction("words", "readwrite");
-  const store = transaction.objectStore("words");
-
-  store.put(wordObj);
-
-  // Reload UI
-  transaction.oncomplete = function () {
-    loadBook(document.getElementById("dateFilter").value);
-};};
     });
 
     // ===== SEARCH NAVIGATION (AFTER RENDERING) =====
