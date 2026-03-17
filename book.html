@@ -42,9 +42,6 @@
   <input type="text" id="searchInput" placeholder="Search word..." class="book-search">
 </div>
 
-<!-- SEARCH NAVIGATOR -->
-
-
 <div id="bookContainer" class="book-container"></div>
 
 <script>
@@ -58,6 +55,18 @@ if (savedTheme === "light") {
 let db;
 
 const request = indexedDB.open("VocabDB", 2);
+
+request.onupgradeneeded = function (event) {
+  const d = event.target.result;
+  if (!d.objectStoreNames.contains("words")) {
+    d.createObjectStore("words", { keyPath: "id", autoIncrement: true });
+  }
+};
+
+request.onerror = function () {
+  document.getElementById("bookContainer").innerHTML =
+    "<p>⚠️ Could not open database. Please go back and try again.</p>";
+};
 
 request.onsuccess = function () {
   db = request.result;
@@ -168,6 +177,7 @@ function loadBook(filterDays) {
 
       card.innerHTML = `
         <h3>${wordObj.word}</h3>
+        ${wordObj.phonetics ? `<div class="phonetics-badge">${wordObj.phonetics}</div>` : ""}
         <ul>${meanings}</ul>
       `;
 
@@ -197,13 +207,12 @@ function loadBook(filterDays) {
           element.classList.add("active-match");
 
           const containerTop = container.getBoundingClientRect().top;
-const elementTop = element.getBoundingClientRect().top;
+          const elementTop = element.getBoundingClientRect().top;
 
-container.scrollBy({
-  top: elementTop - containerTop - 100,
-  behavior: "smooth"
-});
-
+          container.scrollBy({
+            top: elementTop - containerTop - 100,
+            behavior: "smooth"
+          });
 
           document.getElementById("matchCounter").innerText =
             `${index + 1} / ${matchedElements.length}`;
