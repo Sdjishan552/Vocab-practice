@@ -1279,6 +1279,32 @@ function masterDeleteAllData() {
 
 document.getElementById("masterDeleteBtn")
   .addEventListener("click", masterDeleteAllData);
+
+// ===== EXPORT ALL DATA =====
+function exportAllData() {
+  getAllWords(function (words) {
+    if (!words || words.length === 0) {
+      alert("No data to export.");
+      return;
+    }
+
+    const rows = words.map(w => ({
+      Word: w.word,
+      Meaning: (w.meanings || []).join(", "),
+      Phonetics: w.phonetics || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Vocabulary");
+
+    const fileName = "vocab_export_" + new Date().toISOString().split("T")[0] + ".xlsx";
+    XLSX.writeFile(workbook, fileName);
+  });
+}
+
+document.getElementById("exportBtn")
+  .addEventListener("click", exportAllData);
 // ===== THEME SYSTEM =====
 
 const themeBtn = document.getElementById("themeToggleBtn");
