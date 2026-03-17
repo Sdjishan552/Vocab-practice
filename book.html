@@ -176,12 +176,39 @@ function loadBook(filterDays) {
         .join("");
 
       card.innerHTML = `
-        <h3>${wordObj.word}</h3>
-        ${wordObj.phonetics ? `<div class="phonetics-badge">${wordObj.phonetics}</div>` : ""}
-        <ul>${meanings}</ul>
-      `;
+  <div class="word-header">
+    <h3>${wordObj.word}</h3>
+    <button class="edit-note-btn">✏️</button>
+  </div>
+
+  ${wordObj.phonetics ? `<div class="phonetics-badge">${wordObj.phonetics}</div>` : ""}
+
+  <ul>${meanings}</ul>
+
+  <div class="note-box">
+    ${wordObj.note ? `<strong>🧠 Note:</strong> ${wordObj.note}` : ""}
+  </div>
+`;
 
       container.appendChild(card);
+      const editBtn = card.querySelector(".edit-note-btn");
+
+editBtn.onclick = function () {
+
+  const newNote = prompt("Write your note for this word:", wordObj.note || "");
+
+  if (newNote === null) return; // cancel
+
+  const transaction = db.transaction("words", "readwrite");
+  const store = transaction.objectStore("words");
+
+  wordObj.note = newNote;
+
+  store.put(wordObj);
+
+  // Reload UI
+  loadBook(document.getElementById("dateFilter").value);
+};
     });
 
     // ===== SEARCH NAVIGATION (AFTER RENDERING) =====
