@@ -6,7 +6,7 @@
   <title>Vocab Practice Engine</title>
 
   <!-- PWA -->
-<link rel="manifest" href="manifest.json" />
+  <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#ff1a1a" />
 
   <!-- Styles -->
@@ -91,25 +91,21 @@
 
   <!-- Book Mode Button -->
   <a href="book.html" class="book-mode-card">
-  📖 Open Vocabulary Book
-</a>
-
-
+    📖 Open Vocabulary Book
+  </a>
 
   <div id="analyticsContainer"></div>
   <div id="uploadChartContainer" style="margin-top:30px;"></div>
 
-  <div style="margin-top:30px; text-align:center;">
+  <div style="margin-top:30px; text-align:center; display:flex; gap:15px; justify-content:center; flex-wrap:wrap;">
+    <button id="exportBtn" class="export-btn">
+      📤 Export All Data
+    </button>
     <button id="masterDeleteBtn" class="danger-btn">
       🔥 Master Delete All Data
     </button>
   </div>
 </section>
-
-
-
-<!-- ================= DEBUG ================= -->
- 
 
 <!-- ================= FOCUS MODE ================= -->
 <div id="focusMode">
@@ -123,7 +119,7 @@
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-navigator.serviceWorker.register("service-worker.js")
+    navigator.serviceWorker.register("service-worker.js")
       .then(reg => {
         console.log("Service Worker registered. Scope:", reg.scope);
       })
