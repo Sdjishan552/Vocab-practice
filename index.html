@@ -33,12 +33,15 @@
   <button onclick="showSection('practice')">Practice</button>
   <button onclick="showSection('exam')">Exam</button>
   <button onclick="showSection('analytics')">Analytics</button>
+  <button onclick="window.location.href='book.html'" title="Open Vocabulary Book">
+  📖 Book
+</button>
 </nav>
 
 <!-- ================= UPLOAD ================= -->
 <section id="upload" class="section active">
   <h2>Upload Excel</h2>
-
+  <div id="loadingIndicator" style="display:none;">⏳ Processing...</div>
   <div class="file-upload-wrapper">
     <input type="file" id="excelFile" accept=".xlsx,.xls" hidden />
 
@@ -129,6 +132,13 @@ if ("serviceWorker" in navigator) {
   });
 }
 </script>
-
+<script>
+window.addEventListener("beforeunload", function (e) {
+  if (document.getElementById("focusMode").classList.contains("active")) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
+</script>
 </body>
 </html>
