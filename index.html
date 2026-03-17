@@ -14,6 +14,7 @@
 
   <!-- Excel Library -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  
 </head>
 
 <body>
@@ -26,13 +27,13 @@
     🌙 Dark Mode
   </button>
 </header>
-
+<div id="quickStats"></div>
 <!-- ================= NAVIGATION ================= -->
 <nav>
-  <button onclick="showSection('upload')">Upload</button>
-  <button onclick="showSection('practice')">Practice</button>
-  <button onclick="showSection('exam')">Exam</button>
-  <button onclick="showSection('analytics')">Analytics</button>
+  <button type="button" onclick="showSection('upload')">Upload</button>
+  <button type="button" onclick="showSection('practice')">Practice</button>
+<button type="button" onclick="showSection('exam')">Exam</button>
+<button type="button" onclick="showSection('analytics')">Analytics</button>
 </nav>
 
 <!-- ================= UPLOAD ================= -->
