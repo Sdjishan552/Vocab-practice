@@ -54,8 +54,7 @@ if (savedTheme === "light") {
 
 let db;
 
-const request = indexedDB.open("VocabDB", 2);
-
+const request = indexedDB.open("VocabDB", 3);
 request.onupgradeneeded = function (event) {
   const d = event.target.result;
   if (!d.objectStoreNames.contains("words")) {
@@ -186,8 +185,9 @@ function loadBook(filterDays) {
   <ul>${meanings}</ul>
 
   <div class="note-box">
-    ${wordObj.note ? `<strong>🧠 Note:</strong> ${wordObj.note}` : ""}
-  </div>
+  <strong>🧠 Note:</strong> 
+  ${wordObj.note ? wordObj.note : "<em>No note added</em>"}
+</div>
 `;
 
       container.appendChild(card);
@@ -197,18 +197,24 @@ editBtn.onclick = function () {
 
   const newNote = prompt("Write your note for this word:", wordObj.note || "");
 
-  if (newNote === null) return; // cancel
+if (newNote === null) return;
 
+const cleanedNote = newNote.trim();
+
+if (cleanedNote === "") {
+  wordObj.note = "";
+} else {
+  wordObj.note = cleanedNote;
+}
   const transaction = db.transaction("words", "readwrite");
   const store = transaction.objectStore("words");
-
-  wordObj.note = newNote;
 
   store.put(wordObj);
 
   // Reload UI
-  loadBook(document.getElementById("dateFilter").value);
-};
+  transaction.oncomplete = function () {
+    loadBook(document.getElementById("dateFilter").value);
+};};
     });
 
     // ===== SEARCH NAVIGATION (AFTER RENDERING) =====
