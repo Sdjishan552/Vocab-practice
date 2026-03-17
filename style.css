@@ -722,3 +722,15 @@ body.book-page {
   text-align: center;
   line-height: 1.2;
 }
+.phonetics-badge {
+  display: inline-block;
+  font-style: italic;
+  font-size: 0.85rem;
+  color: #aaa;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 20px;
+  padding: 2px 12px;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
