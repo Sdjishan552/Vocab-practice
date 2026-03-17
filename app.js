@@ -3,138 +3,108 @@ document.addEventListener("DOMContentLoaded", function () {
   function logDebug(message) {
     console.log("[DEBUG]:", message);
   }
- 
- 
+
   /***********************
     SECTION SWITCHING
   ************************/
+  window.showSection = function (sectionId) {
+    document.querySelectorAll(".section").forEach(sec => {
+      sec.classList.remove("active");
+    });
 
-window.showSection = function (sectionId) {
+    const target = document.getElementById(sectionId);
+    if (target) target.classList.add("active");
 
-  document.querySelectorAll(".section").forEach(sec => {
-    sec.classList.remove("active");
-  });
+    if (sectionId === "analytics" && db) {
+      loadSessionAnalytics();
+    }
 
-  document.getElementById(sectionId).classList.add("active");
-
-  if (sectionId === "analytics" && db) {
-    loadSessionAnalytics();
-  }
-
-  if (sectionId === "book" && db) {
-    loadBookMode();
-  }
-};
-
-
+    // FIX 1: Removed loadBookMode() call — function was never defined, caused ReferenceError
+  };
 
   /***********************
     INDEXED DB SETUP
   ************************/
+  let db;
 
- let db;
+  function initDB() {
+    document.getElementById("startPractice").disabled = true;
+    document.getElementById("startExam").disabled = true;
+    document.getElementById("startWeakMode").disabled = true;
+    document.getElementById("uploadBtn").disabled = true;
 
-function initDB() {
+    const request = indexedDB.open("VocabDB", 3);
 
-  // Disable buttons until DB is ready
-  document.getElementById("startPractice").disabled = true;
-  document.getElementById("startExam").disabled = true;
-  document.getElementById("startWeakMode").disabled = true;
-  document.getElementById("uploadBtn").disabled = true;
+    request.onerror = function () {
+      logDebug("Database failed to open");
+    };
 
-const request = indexedDB.open("VocabDB", 3);
-  request.onerror = function () {
-    logDebug("Database failed to open");
-  };
+    request.onupgradeneeded = function (event) {
+      db = event.target.result;
 
-  request.onupgradeneeded = function (event) {
-    db = event.target.result;
+      if (!db.objectStoreNames.contains("words")) {
+        const wordsStore = db.createObjectStore("words", {
+          keyPath: "id",
+          autoIncrement: true
+        });
+        wordsStore.createIndex("word", "word", { unique: false });
+        wordsStore.createIndex("batchId", "batchId", { unique: false });
+      } else {
+        const transaction = event.target.transaction;
+        const store = transaction.objectStore("words");
 
-    // WORDS STORE
-    // WORDS STORE
-// WORDS STORE
-// WORDS STORE
-// WORDS STORE
-if (!db.objectStoreNames.contains("words")) {
-
-  const wordsStore = db.createObjectStore("words", {
-    keyPath: "id",
-    autoIncrement: true
-  });
-
-  wordsStore.createIndex("word", "word", { unique: false });
-  wordsStore.createIndex("batchId", "batchId", { unique: false });
-
-} else {
-
-  // ✅ Migration for existing DB
-  const transaction = event.target.transaction;
-  const store = transaction.objectStore("words");
-
-  store.openCursor().onsuccess = function (e) {
-    const cursor = e.target.result;
-    if (cursor) {
-      const value = cursor.value;
-      if (value.note === undefined) {
-        value.note = "";
-        cursor.update(value);
+        store.openCursor().onsuccess = function (e) {
+          const cursor = e.target.result;
+          if (cursor) {
+            const value = cursor.value;
+            if (value.note === undefined) {
+              value.note = "";
+              cursor.update(value);
+            }
+            cursor.continue();
+          }
+        };
       }
-      cursor.continue();
-    }
-  };
 
-}
+      if (!db.objectStoreNames.contains("sessions")) {
+        db.createObjectStore("sessions", {
+          keyPath: "id",
+          autoIncrement: true
+        });
+      }
 
-    // SESSIONS STORE
-    if (!db.objectStoreNames.contains("sessions")) {
-      db.createObjectStore("sessions", {
-        keyPath: "id",
-        autoIncrement: true
-      });
-    }
+      logDebug("Database structure created");
+    };
 
-    logDebug("Database structure created");
-}; 
+    request.onsuccess = function () {
+      db = request.result;
 
-request.onsuccess = function () {
+      if (!db.objectStoreNames.contains("words") ||
+          !db.objectStoreNames.contains("sessions")) {
 
-  db = request.result;
+        logDebug("Database structure missing. Rebuilding...");
+        db.close();
+        indexedDB.deleteDatabase("VocabDB");
+        location.reload();
+        return;
+      }
 
-  // SAFETY CHECK
-  if (!db.objectStoreNames.contains("words") ||
-      !db.objectStoreNames.contains("sessions")) {
+      logDebug("Database opened successfully");
 
-    logDebug("Database structure missing. Rebuilding...");
+      document.getElementById("startPractice").disabled = false;
+      document.getElementById("startExam").disabled = false;
+      document.getElementById("startWeakMode").disabled = false;
+      document.getElementById("uploadBtn").disabled = false;
 
-    db.close();
-    indexedDB.deleteDatabase("VocabDB");
-
-    location.reload();
-    return;
+      loadSessionAnalytics();
+    };
   }
 
-  logDebug("Database opened successfully");
-
-
-    // Enable buttons now
-    document.getElementById("startPractice").disabled = false;
-    document.getElementById("startExam").disabled = false;
-    document.getElementById("startWeakMode").disabled = false;
-    document.getElementById("uploadBtn").disabled = false;
-
-    // Always refresh analytics once DB is ready
-    loadSessionAnalytics();
-  };
-}
-
-initDB();
-
-
+  initDB();
 
   /***********************
     BASIC DB HELPERS
   ************************/
-
   function addWordToDB(wordObject) {
     const transaction = db.transaction("words", "readwrite");
     const store = transaction.objectStore("words");
@@ -152,46 +122,46 @@ initDB();
   }
 
   function addSessionToDB(sessionObject, callback) {
-  const transaction = db.transaction("sessions", "readwrite");
-  const store = transaction.objectStore("sessions");
-  const request = store.add(sessionObject);
+    const transaction = db.transaction("sessions", "readwrite");
+    const store = transaction.objectStore("sessions");
+    const request = store.add(sessionObject);
 
-  request.onsuccess = function () {
-    if (callback) callback();
-  };
-}
-
-
-
+    request.onsuccess = function () {
+      if (callback) callback();
+    };
+  }
 
   /***********************
     EXCEL UPLOAD HANDLER
   ************************/
-
   document.getElementById("uploadBtn").addEventListener("click", function () {
     document.getElementById("loadingIndicator").style.display = "block";
     document.getElementById("uploadBtn").disabled = true;
+
     const fileInput = document.getElementById("excelFile");
     const file = fileInput.files[0];
 
     if (!file) {
       alert("Please select an Excel file.");
-
       document.getElementById("loadingIndicator").style.display = "none";
       document.getElementById("uploadBtn").disabled = false;
-
       return;
     }
 
     if (!db) {
       alert("Database not ready yet. Please refresh.");
-
       document.getElementById("loadingIndicator").style.display = "none";
       document.getElementById("uploadBtn").disabled = false;
-
       return;
     }
+
     const reader = new FileReader();
+
+    reader.onerror = function () {
+      alert("Error reading file.");
+      document.getElementById("loadingIndicator").style.display = "none";
+      document.getElementById("uploadBtn").disabled = false;
+    };
 
     reader.onload = function (e) {
       try {
@@ -200,1222 +170,955 @@ initDB();
 
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
         if (jsonData.length === 0) {
           alert("Excel file is empty or invalid format.");
-
           document.getElementById("loadingIndicator").style.display = "none";
           document.getElementById("uploadBtn").disabled = false;
-
-        return;
+          return;
         }
 
         const batchId = new Date().toISOString();
-
         let addedCount = 0;
 
-const transaction = db.transaction("words", "readwrite");
-const store = transaction.objectStore("words");
+        const transaction = db.transaction("words", "readwrite");
+        const store = transaction.objectStore("words");
 
-jsonData.forEach(row => {
+        jsonData.forEach(row => {
+          const mainWord = row.Word ? row.Word.trim() : "";
+          const newMeanings = row.Meaning
+            ? row.Meaning.split(",").map(m => m.trim())
+            : [];
+          const newPhonetics = row.Phonetics ? row.Phonetics.trim() : "";
+          const newNote = row.Note ? row.Note.trim() : "";
 
-  const mainWord = row.Word ? row.Word.trim() : "";
-  const newMeanings = row.Meaning
-    ? row.Meaning.split(",").map(m => m.trim())
-    : [];
-  const newPhonetics = row.Phonetics ? row.Phonetics.trim() : "";
-  const newNote = row.Note ? row.Note.trim() : "";
-  if (mainWord === "") return;
+          if (mainWord === "") return;
 
-  const getRequest = store.index("word").getAll(mainWord);
+          const getRequest = store.index("word").getAll(mainWord);
 
-  getRequest.onsuccess = function () {
+          getRequest.onsuccess = function () {
+            const existingWords = getRequest.result;
 
-    const existingWords = getRequest.result;
+            if (existingWords.length > 0) {
+              const existingWord = existingWords[0];
+              const existingMeanings = existingWord.meanings || [];
+              const mergedMeanings = [...new Set([...existingMeanings, ...newMeanings])];
 
-    if (existingWords.length > 0) {
+              existingWord.meanings = mergedMeanings;
 
-      // Merge with first match
-      const existingWord = existingWords[0];
+              if (newPhonetics && !existingWord.phonetics) {
+                existingWord.phonetics = newPhonetics;
+              }
+              if (newNote) {
+                existingWord.note = newNote;
+              }
 
-      const existingMeanings = existingWord.meanings || [];
+              store.put(existingWord);
+            } else {
+              const wordObject = {
+                word: mainWord,
+                meanings: [...new Set(newMeanings)],
+                phonetics: newPhonetics,
+                note: newNote || "",
+                wrongCount: 0,
+                correctCount: 0,
+                totalAttempts: 0,
+                lastAsked: null,
+                reviewInterval: 1,
+                nextReviewDate: Date.now(),
+                batchId: batchId,
+                createdAt: new Date()
+              };
 
-      const mergedMeanings = [
-        ...new Set([
-          ...existingMeanings,
-          ...newMeanings
-        ])
-      ];
+              store.add(wordObject);
+              addedCount++;
+            }
+          };
+        });
 
-      existingWord.meanings = mergedMeanings;
-      if (newPhonetics && !existingWord.phonetics) {
-        existingWord.phonetics = newPhonetics;
+        transaction.oncomplete = function () {
+          logDebug("Excel processed. Words added: " + addedCount);
+          document.getElementById("uploadStatus").innerText =
+            "Upload successful! Words saved to database.";
+          loadSessionAnalytics();
+          document.getElementById("loadingIndicator").style.display = "none";
+          document.getElementById("uploadBtn").disabled = false;
+          fileInput.value = "";
+        };
+
+        transaction.onerror = function () {
+          alert("Error saving data.");
+          document.getElementById("loadingIndicator").style.display = "none";
+          document.getElementById("uploadBtn").disabled = false;
+        };
+
+      } catch (error) {
+        logDebug("Excel Processing Error: " + error.message);
+        document.getElementById("loadingIndicator").style.display = "none";
+        document.getElementById("uploadBtn").disabled = false;
       }
-
-      if (newNote) {
-        existingWord.note = newNote;
-      }
-
-      store.put(existingWord);
-
-    } else {
-
-      const wordObject = {
-  word: mainWord,
-  meanings: [...new Set(newMeanings)],
-  phonetics: newPhonetics,
-  note: newNote || "",
-  wrongCount: 0,
-  correctCount: 0,
-  totalAttempts: 0,
-  lastAsked: null,
-  reviewInterval: 1,
-  nextReviewDate: Date.now(),
-  batchId: batchId,
-  createdAt: new Date()
-};
-
-      store.add(wordObject);
-      addedCount++;
-
-    }
-
-  };
-
-});
-
-
-transaction.oncomplete = function () {
-  logDebug("Excel processed. Words added: " + addedCount);
-
-  document.getElementById("uploadStatus").innerText =
-    "Upload successful! Words saved to database.";
-
-  loadSessionAnalytics();
-  document.getElementById("loadingIndicator").style.display = "none";
-  document.getElementById("uploadBtn").disabled = false;
-};
-
-        fileInput.value = "";
-
-      }catch (error) {
-  logDebug("Excel Processing Error: " + error.message);
-
-  document.getElementById("loadingIndicator").style.display = "none";
-  document.getElementById("uploadBtn").disabled = false;
-}
     };
 
     reader.readAsArrayBuffer(file);
   });
 
-let allWordsGlobal = [];
-let meaningToWordMap = {};
+  let allWordsGlobal = [];
+  let meaningToWordMap = {};
 
-/***********************
-  QUIZ ENGINE
-************************/
+  /***********************
+    QUIZ ENGINE
+  ************************/
+  let currentQuestions = [];
+  let currentIndex = 0;
+  let score = 0;
+  let examMode = false;
+  let sessionResults = [];
 
-let currentQuestions = [];
-let currentIndex = 0;
-let score = 0;
-let examMode = false;
-let sessionResults = [];
+  let timerInterval = null;
+  let timeLeft = 0;
+  let quizStartTime = 0;
+  let quizEndTime = 0;
 
-let timerInterval = null;
-let timeLeft = 0;
-let quizStartTime = 0;
-let quizEndTime = 0;
-
-
-
-// Start Practice
-document.getElementById("startPractice").addEventListener("click", function () {
-  const count = parseInt(document.getElementById("practiceCountInput").value);
-  startQuiz(count, false);
-});
-document.getElementById("startWeakMode").addEventListener("click", function () {
-  startWeakDrill(20); // 20 weak questions
-});
-
-// Start Exam
-document.getElementById("startExam").addEventListener("click", function () {
-startQuiz(50, true);
-});
-function shuffleArray(array) {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-
-function startQuiz(totalQuestions, isExam) {
-
-  if (!db) {
-    alert("Database not ready.");
-    return;
-  }
-
-  getAllWords(function (words) {
-
-    allWordsGlobal = words;
-    // ===== BUILD MEANING MAP =====
-
-meaningToWordMap = {};
-
-words.forEach(word => {
-  word.meanings.forEach(meaning => {
-
-    const key = meaning.toLowerCase();
-
-    if (!meaningToWordMap[key]) {
-      meaningToWordMap[key] = [];
-    }
-
-    meaningToWordMap[key].push(word.word);
-
+  document.getElementById("startPractice").addEventListener("click", function () {
+    const count = parseInt(document.getElementById("practiceCountInput").value);
+    startQuiz(count, false);
   });
-});
 
-    if (words.length < 5) {
-      alert("Not enough words in database.");
+  document.getElementById("startWeakMode").addEventListener("click", function () {
+    startWeakDrill(20);
+  });
+
+  document.getElementById("startExam").addEventListener("click", function () {
+    startQuiz(50, true);
+  });
+
+  function shuffleArray(array) {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function startQuiz(totalQuestions, isExam) {
+    if (!db) {
+      alert("Database not ready.");
       return;
     }
 
-    examMode = isExam;
-    score = 0;
-    currentIndex = 0;
-    sessionResults = [];
-    quizStartTime = Date.now();
+    getAllWords(function (words) {
+      allWordsGlobal = words;
 
+      meaningToWordMap = {};
+      words.forEach(word => {
+        word.meanings.forEach(meaning => {
+          const key = meaning.toLowerCase();
+          if (!meaningToWordMap[key]) {
+            meaningToWordMap[key] = [];
+          }
+          meaningToWordMap[key].push(word.word);
+        });
+      });
 
-    const now = Date.now();
-    const oneDay = 24 * 60 * 60 * 1000;
-
-    const freshWords = words.filter(w => {
-      return !w.lastAsked || (now - w.lastAsked) > oneDay;
-    });
-
-    const nowTime = Date.now();
-
-const dueWords = words.filter(w =>
-  !w.nextReviewDate || w.nextReviewDate <= nowTime
-);
-
-const pool = dueWords.length >= totalQuestions ? dueWords : words;
-
-
-    // ---- Adaptive Difficulty Engine ----
-
-    const threeDays = 3 * 24 * 60 * 60 * 1000;
-
-    let weak = [];
-    let medium = [];
-    let strong = [];
-
-    pool.forEach(word => {
-
-      const wrong = word.wrongCount || 0;
-      const correct = word.correctCount || 0;
-      const lastAsked = word.lastAsked || 0;
-
-      if ((now - lastAsked) > threeDays) {
-        medium.push(word);
+      if (words.length < 5) {
+        alert("Not enough words in database.");
         return;
       }
 
-      if (wrong > correct) {
-        weak.push(word);
-      } else if (correct > wrong && correct > 2) {
-        strong.push(word);
-      } else {
-        medium.push(word);
-      }
-    });
+      examMode = isExam;
+      score = 0;
+      currentIndex = 0;
+      sessionResults = [];
+      quizStartTime = Date.now();
 
-    weak = shuffleArray(weak);
-    medium = shuffleArray(medium);
-    strong = shuffleArray(strong);
+      const now = Date.now();
 
-    const weakCount = Math.floor(totalQuestions * 0.5);
-    const mediumCount = Math.floor(totalQuestions * 0.3);
-    const strongCount = totalQuestions - weakCount - mediumCount;
-
-    let selected = [
-      ...weak.slice(0, weakCount),
-      ...medium.slice(0, mediumCount),
-      ...strong.slice(0, strongCount)
-    ];
-
-    if (selected.length < totalQuestions) {
-
-      const remaining = shuffleArray(
-        pool.filter(w => !selected.includes(w))
+      const dueWords = words.filter(w =>
+        !w.nextReviewDate || w.nextReviewDate <= now
       );
 
-      selected = [
-        ...selected,
-        ...remaining.slice(0, totalQuestions - selected.length)
+      const pool = dueWords.length >= totalQuestions ? dueWords : words;
+
+      const threeDays = 3 * 24 * 60 * 60 * 1000;
+      let weak = [];
+      let medium = [];
+      let strong = [];
+
+      pool.forEach(word => {
+        const wrong = word.wrongCount || 0;
+        const correct = word.correctCount || 0;
+        const lastAsked = word.lastAsked || 0;
+
+        if ((now - lastAsked) > threeDays) {
+          medium.push(word);
+          return;
+        }
+
+        if (wrong > correct) {
+          weak.push(word);
+        } else if (correct > wrong && correct > 2) {
+          strong.push(word);
+        } else {
+          medium.push(word);
+        }
+      });
+
+      weak = shuffleArray(weak);
+      medium = shuffleArray(medium);
+      strong = shuffleArray(strong);
+
+      const weakCount = Math.floor(totalQuestions * 0.5);
+      const mediumCount = Math.floor(totalQuestions * 0.3);
+      const strongCount = totalQuestions - weakCount - mediumCount;
+
+      let selected = [
+        ...weak.slice(0, weakCount),
+        ...medium.slice(0, mediumCount),
+        ...strong.slice(0, strongCount)
       ];
-    }
 
-    currentQuestions = shuffleArray(selected);
+      if (selected.length < totalQuestions) {
+        const remaining = shuffleArray(
+          pool.filter(w => !selected.includes(w))
+        );
+        selected = [
+          ...selected,
+          ...remaining.slice(0, totalQuestions - selected.length)
+        ];
+      }
 
-    enterFocusMode();
-renderQuestion();
+      currentQuestions = shuffleArray(selected);
 
-  });
-}
-function startWeakDrill(totalQuestions) {
-
-  if (!db) {
-    alert("Database not ready.");
-    return;
+      enterFocusMode();
+      renderQuestion();
+    });
   }
 
-  getAllWords(function (words) {
+  function startWeakDrill(totalQuestions) {
+    if (!db) {
+      alert("Database not ready.");
+      return;
+    }
 
-    allWordsGlobal = words;
+    getAllWords(function (words) {
+      allWordsGlobal = words;
 
-    // ===== BUILD MEANING MAP (FIX 4) =====
-    meaningToWordMap = {};
-    words.forEach(word => {
-      word.meanings.forEach(meaning => {
-        const key = meaning.toLowerCase();
-        if (!meaningToWordMap[key]) {
-          meaningToWordMap[key] = [];
+      meaningToWordMap = {};
+      words.forEach(word => {
+        word.meanings.forEach(meaning => {
+          const key = meaning.toLowerCase();
+          if (!meaningToWordMap[key]) {
+            meaningToWordMap[key] = [];
+          }
+          meaningToWordMap[key].push(word.word);
+        });
+      });
+
+      examMode = false;
+      score = 0;
+      currentIndex = 0;
+      sessionResults = [];
+      quizStartTime = Date.now();
+
+      const sortedByWeakness = [...words]
+        .sort((a, b) => (b.wrongCount || 0) - (a.wrongCount || 0));
+
+      const weakestPool = sortedByWeakness.slice(0, 30);
+      const shuffled = shuffleArray(weakestPool);
+      currentQuestions = shuffled.slice(0, totalQuestions);
+
+      enterFocusMode();
+      renderQuestion();
+    });
+  }
+
+  function renderQuestion() {
+    if (currentIndex >= currentQuestions.length) {
+      endQuiz();
+      return;
+    }
+
+    clearInterval(timerInterval);
+    timerInterval = null;
+
+    const container = document.getElementById("focusContent");
+    container.innerHTML = "";
+
+    // child[0] — Exit button
+    const exitBtn = document.createElement("button");
+    exitBtn.innerText = "Exit";
+    exitBtn.style.alignSelf = "flex-end";
+    exitBtn.style.background = "#444";
+    exitBtn.onclick = function () {
+      if (confirm("Are you sure you want to exit? Progress will be lost.")) {
+        exitFocusMode();
+      }
+    };
+    container.appendChild(exitBtn);
+
+    const question = currentQuestions[currentIndex];
+    updateLastAsked(question.id);
+
+    // child[1] — Info bar (progress + score)
+    const infoBar = document.createElement("div");
+    infoBar.style.marginBottom = "10px";
+    infoBar.style.fontWeight = "bold";
+    if (examMode) {
+      infoBar.innerText = `Question ${currentIndex + 1} / ${currentQuestions.length}`;
+    } else {
+      infoBar.innerText = `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
+    }
+    container.appendChild(infoBar);
+
+    const title = document.createElement("h3");
+    title.innerText = question.word;
+    title.classList.add(examMode ? "exam-word" : "practice-word");
+    container.appendChild(title);
+
+    if (question.phonetics) {
+      const phonDiv = document.createElement("div");
+      phonDiv.className = "phonetics-badge";
+      phonDiv.innerText = question.phonetics;
+      container.appendChild(phonDiv);
+    }
+
+    if (examMode) {
+      const timerDisplay = document.createElement("div");
+      timerDisplay.className = "timer";
+      container.appendChild(timerDisplay);
+      startTimer(timerDisplay);
+    }
+
+    const options = generateOptions(question);
+    options.forEach(optionText => {
+      const label = document.createElement("label");
+      label.className = "option";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = optionText;
+
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(optionText));
+      container.appendChild(label);
+    });
+
+    const submitBtn = document.createElement("button");
+    submitBtn.innerText = "Submit";
+    submitBtn.className = "submit-btn";
+    submitBtn.onclick = checkAnswer;
+    container.appendChild(submitBtn);
+  }
+
+  function generateOptions(question) {
+    const maxCorrectAllowed = 3;
+    const shuffledCorrect = shuffleArray(question.meanings);
+    const possibleMax = Math.min(maxCorrectAllowed, shuffledCorrect.length);
+
+    const accuracy = calculateAccuracy(question);
+    let numberOfCorrect;
+    const rand = Math.random();
+
+    if (accuracy < 50) {
+      numberOfCorrect = rand < 0.85 ? 1 : 2;
+    } else if (accuracy < 80) {
+      if (rand < 0.6) numberOfCorrect = 1;
+      else if (rand < 0.9) numberOfCorrect = 2;
+      else numberOfCorrect = 3;
+    } else {
+      if (rand < 0.3) numberOfCorrect = 1;
+      else if (rand < 0.7) numberOfCorrect = 2;
+      else numberOfCorrect = 3;
+    }
+
+    numberOfCorrect = Math.min(numberOfCorrect, possibleMax);
+    const correctToUse = shuffledCorrect.slice(0, numberOfCorrect);
+
+    const currentWordMeaningsLower = question.meanings.map(m => m.toLowerCase());
+    const otherWords = allWordsGlobal.filter(w => w.word !== question.word);
+
+    let incorrectPool = [];
+    otherWords.forEach(w => {
+      w.meanings.forEach(m => {
+        if (!currentWordMeaningsLower.includes(m.toLowerCase())) {
+          incorrectPool.push(m);
         }
-        meaningToWordMap[key].push(word.word);
       });
     });
 
-    examMode = false;
-    score = 0;
-    currentIndex = 0;
-    sessionResults = []; // FIX 4: initialize sessionResults
-    quizStartTime = Date.now(); // FIX 4: track start time
+    incorrectPool = [...new Set(incorrectPool)];
+    const shuffledIncorrect = shuffleArray(incorrectPool);
+    const totalOptions = 5;
+    const neededIncorrect = totalOptions - correctToUse.length;
+    const selectedIncorrect = shuffledIncorrect.slice(0, neededIncorrect);
 
-    // Sort by wrongCount descending
-    const sortedByWeakness = [...words]
-      .sort((a, b) => (b.wrongCount || 0) - (a.wrongCount || 0));
+    const finalOptions = shuffleArray([...correctToUse, ...selectedIncorrect]);
 
-    const weakestPool = sortedByWeakness.slice(0, 30);
-
-    const shuffled = shuffleArray(weakestPool);
-
-    currentQuestions = shuffled.slice(0, totalQuestions);
-
-enterFocusMode();
-renderQuestion();
-
-  });
-}
-
-function renderQuestion() {
-
-  if (currentIndex >= currentQuestions.length) {
-    endQuiz();
-    return;
+    question.currentCorrectAnswers = correctToUse;
+    return finalOptions;
   }
 
-  // FIX 5: Clear timer BEFORE wiping container so ghost tick cannot fire on stale element
-  clearInterval(timerInterval);
-  timerInterval = null;
-
-  const container = document.getElementById("focusContent");
-
-  container.innerHTML = "";
-// ===== EXIT BUTTON =====
-const exitBtn = document.createElement("button");
-exitBtn.innerText = "Exit";
-exitBtn.style.alignSelf = "flex-end";
-exitBtn.style.background = "#444";
-exitBtn.onclick = function () {
-  if (confirm("Are you sure you want to exit? Progress will be lost.")) {
-    exitFocusMode();
-  }
-};
-container.appendChild(exitBtn);
-
-  const question = currentQuestions[currentIndex];
-  updateLastAsked(question.id);
-
-  // Progress + Score
-  const infoBar = document.createElement("div");
-  infoBar.style.marginBottom = "10px";
-  infoBar.style.fontWeight = "bold";
-  if (examMode) {
-  infoBar.innerText =
-    `Question ${currentIndex + 1} / ${currentQuestions.length}`;
-} else {
-  infoBar.innerText =
-    `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
-}
-
-  container.appendChild(infoBar);
-
-  // Question title
-  const title = document.createElement("h3");
-title.innerText = question.word;
-
-if (examMode) {
-  title.classList.add("exam-word");
-} else {
-  title.classList.add("practice-word");
-}
-
-container.appendChild(title);
-
-// Phonetics badge (below the word)
-if (question.phonetics) {
-  const phonDiv = document.createElement("div");
-  phonDiv.className = "phonetics-badge";
-  phonDiv.innerText = question.phonetics;
-  container.appendChild(phonDiv);
-}
-
-  // Timer (exam only)
-  if (examMode) {
-    const timerDisplay = document.createElement("div");
-    timerDisplay.className = "timer";
-    container.appendChild(timerDisplay);
-    startTimer(timerDisplay);
-  }
-
-  // Generate options
-  const options = generateOptions(question);
-
-  options.forEach(optionText => {
-    const label = document.createElement("label");
-    label.className = "option";
-
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.value = optionText;
-
-    label.appendChild(checkbox);
-    label.appendChild(document.createTextNode(optionText));
-
-    container.appendChild(label);
-  });
-
-  const submitBtn = document.createElement("button");
-submitBtn.innerText = "Submit";
-submitBtn.className = "submit-btn";
-submitBtn.onclick = checkAnswer;
-container.appendChild(submitBtn);
-
-}
-
-
-function generateOptions(question) {
-
-  const maxCorrectAllowed = 3;
-
-  const shuffledCorrect = shuffleArray(question.meanings);
-
-  const possibleMax = Math.min(maxCorrectAllowed, shuffledCorrect.length);
-
-  // Dynamic Difficulty Based on Performance
-  const accuracy = calculateAccuracy(question);
-
-  let numberOfCorrect;
-  const rand = Math.random();
-
-  if (accuracy < 50) {
-    if (rand < 0.85) numberOfCorrect = 1;
-    else numberOfCorrect = 2;
-  }
-  else if (accuracy < 80) {
-    if (rand < 0.6) numberOfCorrect = 1;
-    else if (rand < 0.9) numberOfCorrect = 2;
-    else numberOfCorrect = 3;
-  }
-  else {
-    if (rand < 0.3) numberOfCorrect = 1;
-    else if (rand < 0.7) numberOfCorrect = 2;
-    else numberOfCorrect = 3;
-  }
-
-  numberOfCorrect = Math.min(numberOfCorrect, possibleMax);
-
-  const correctToUse = shuffledCorrect.slice(0, numberOfCorrect);
-
-  // ===== FIX 1: Build incorrect pool excluding ANY meaning of the current question =====
-  const currentWordMeaningsLower = question.meanings.map(m => m.toLowerCase());
-
-  const otherWords = allWordsGlobal.filter(
-    w => w.word !== question.word
-  );
-
-  let incorrectPool = [];
-
-  otherWords.forEach(w => {
-    w.meanings.forEach(m => {
-      // FIX 1: Skip if this meaning overlaps with any correct meaning of current word
-      if (!currentWordMeaningsLower.includes(m.toLowerCase())) {
-        incorrectPool.push(m);
-      }
-    });
-  });
-
-  incorrectPool = [...new Set(incorrectPool)];
-
-  const shuffledIncorrect = shuffleArray(incorrectPool);
-
-  const totalOptions = 5;
-  const neededIncorrect = totalOptions - correctToUse.length;
-
-  const selectedIncorrect = shuffledIncorrect.slice(0, neededIncorrect);
-
-  const finalOptions = shuffleArray([
-    ...correctToUse,
-    ...selectedIncorrect
-  ]);
-
-  // Store correct answers temporarily
-  question.currentCorrectAnswers = correctToUse;
-
-  return finalOptions;
-}
-
-
-function checkAnswer() {
-
-  const container = document.getElementById("focusContent");
-
-  const checkboxes = container.querySelectorAll("input[type='checkbox']");
-  const selected = [];
-
-  checkboxes.forEach(cb => {
-    if (cb.checked) selected.push(cb.value);
-  });
-
-const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
-  const totalCorrect = correctAnswers.length;
-  const currentWordId = currentQuestions[currentIndex].id;
-
-  let correctSelected = 0;
-  let wrongSelected = 0;
-
-  selected.forEach(option => {
-
-  const optionLower = option.toLowerCase();
-
-  let isCorrect = false;
-
-  // 1️⃣ Direct match with correct meanings
-  if (correctAnswers.map(ans => ans.toLowerCase()).includes(optionLower)) {
-    isCorrect = true;
-  }
-
-  // 2️⃣ If option is a main word that shares a meaning
-  else {
-
-    const optionWordObj = allWordsGlobal.find(
-      w => w.word.toLowerCase() === optionLower
-    );
-
-    if (optionWordObj) {
-
-      const optionMeanings = optionWordObj.meanings.map(m => m.toLowerCase());
-
-      const correctLower = correctAnswers.map(ans => ans.toLowerCase());
-
-      const hasIntersection = optionMeanings.some(m =>
-        correctLower.includes(m)
-      );
-
-      if (hasIntersection) {
-        isCorrect = true;
-      }
-
-    }
-
-  }
-
-  if (isCorrect) {
-    correctSelected++;
-  } else {
-    wrongSelected++;
-  }
-
-});
-
-
-  let questionScore = 0;
-
-  // Nothing selected
-  if (selected.length === 0) {
-    questionScore = 0;
-  }
-
-  // Any wrong selected
-  else if (wrongSelected > 0) {
-    questionScore = examMode ? -0.25 : 0;
-  }
-
-  // Only correct selected
-  else {
-    questionScore = correctSelected / totalCorrect;
-  }
-
-  score += questionScore;
-
-  updateWordStats(currentWordId, questionScore);
-
-  // FIX 3: isCorrect only true if ALL correct answers were selected and nothing wrong
-  const fullyCorrect = (wrongSelected === 0 && correctSelected === totalCorrect);
-
-  sessionResults.push({
-    word: currentQuestions[currentIndex].word,
-    correctAnswers: correctAnswers,
-    selectedAnswers: selected,
-    isCorrect: fullyCorrect,
-  });
-
-
-  // PRACTICE MODE VISUAL FEEDBACK
-  if (!examMode) {
+  function checkAnswer() {
+    const container = document.getElementById("focusContent");
+    const checkboxes = container.querySelectorAll("input[type='checkbox']");
+    const selected = [];
 
     checkboxes.forEach(cb => {
-      const label = cb.parentElement;
-
-      // Correct answers → green
-      if (correctAnswers.includes(cb.value)) {
-        label.style.backgroundColor = "#c8e6c9";
-      }
-
-      // Wrong selected → red
-      if (cb.checked && !correctAnswers.includes(cb.value)) {
-        label.style.backgroundColor = "#ffcdd2";
-      }
+      if (cb.checked) selected.push(cb.value);
     });
 
-    // Update score display
-    const infoBar = container.firstChild;
-    infoBar.innerText =
-      `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
+    const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
+    const totalCorrect = correctAnswers.length;
+    const currentWordId = currentQuestions[currentIndex].id;
 
-    // Disable submit
-    const submitBtn = container.querySelector(".submit-btn");
-    if (submitBtn) submitBtn.disabled = true;
+    let correctSelected = 0;
+    let wrongSelected = 0;
 
-    setTimeout(() => {
+    selected.forEach(option => {
+      const optionLower = option.toLowerCase();
+      let isCorrect = false;
+
+      if (correctAnswers.map(ans => ans.toLowerCase()).includes(optionLower)) {
+        isCorrect = true;
+      } else {
+        const optionWordObj = allWordsGlobal.find(
+          w => w.word.toLowerCase() === optionLower
+        );
+        if (optionWordObj) {
+          const optionMeanings = optionWordObj.meanings.map(m => m.toLowerCase());
+          const correctLower = correctAnswers.map(ans => ans.toLowerCase());
+          if (optionMeanings.some(m => correctLower.includes(m))) {
+            isCorrect = true;
+          }
+        }
+      }
+
+      if (isCorrect) correctSelected++;
+      else wrongSelected++;
+    });
+
+    let questionScore = 0;
+
+    if (selected.length === 0) {
+      questionScore = 0;
+    } else if (wrongSelected > 0) {
+      questionScore = examMode ? -0.25 : 0;
+    } else {
+      questionScore = correctSelected / totalCorrect;
+    }
+
+    score += questionScore;
+    updateWordStats(currentWordId, questionScore);
+
+    const fullyCorrect = (wrongSelected === 0 && correctSelected === totalCorrect);
+
+    sessionResults.push({
+      word: currentQuestions[currentIndex].word,
+      correctAnswers: correctAnswers,
+      selectedAnswers: selected,
+      isCorrect: fullyCorrect
+    });
+
+    if (!examMode) {
+      checkboxes.forEach(cb => {
+        const label = cb.parentElement;
+        if (correctAnswers.includes(cb.value)) {
+          label.style.backgroundColor = "#c8e6c9";
+        }
+        if (cb.checked && !correctAnswers.includes(cb.value)) {
+          label.style.backgroundColor = "#ffcdd2";
+        }
+      });
+
+      // FIX 2: Was container.firstChild (the Exit button). Now correctly targets children[1] (the info bar).
+      const infoBar = container.children[1];
+      infoBar.innerText = `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
+
+      const submitBtn = container.querySelector(".submit-btn");
+      if (submitBtn) submitBtn.disabled = true;
+
+      setTimeout(() => {
+        currentIndex++;
+        renderQuestion();
+      }, 1500);
+    } else {
       currentIndex++;
+      clearInterval(timerInterval);
+      timerInterval = null;
       renderQuestion();
-    }, 1500);
+    }
+  }
 
-  } else {
-    // EXAM MODE → No color feedback
-    currentIndex++;
-    clearInterval(timerInterval); // FIX 5: clear timer on manual submit
+  function startTimer(displayElement) {
+    clearInterval(timerInterval);
     timerInterval = null;
-    renderQuestion();
-  }
-}
 
-
-
-function startTimer(displayElement) {
-
-  // FIX 5: Stop any previous timer first
-  clearInterval(timerInterval);
-  timerInterval = null;
-
-  // Reset time for EACH question
-  timeLeft = parseInt(document.getElementById("examTimerInput").value);
-
-  // Safety check
-  if (isNaN(timeLeft) || timeLeft <= 0) {
-    timeLeft = 10;
-  }
-
-  displayElement.innerText = "Time Left: " + timeLeft;
-
-  timerInterval = setInterval(() => {
-
-    timeLeft--;
-
-    // FIX 5: Guard — if element no longer in DOM, kill timer immediately
-    if (!document.body.contains(displayElement)) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-      return;
-    }
-
-    if (timeLeft <= 0) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-      displayElement.innerText = "Time Left: 0";
-      currentIndex++;
-      renderQuestion();
-      return;
-    }
+    timeLeft = parseInt(document.getElementById("examTimerInput").value);
+    if (isNaN(timeLeft) || timeLeft <= 0) timeLeft = 10;
 
     displayElement.innerText = "Time Left: " + timeLeft;
 
-  }, 1000);
-}
+    timerInterval = setInterval(() => {
+      timeLeft--;
 
+      if (!document.body.contains(displayElement)) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        return;
+      }
 
-function showAnalytics(container) {
+      if (timeLeft <= 0) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        displayElement.innerText = "Time Left: 0";
+        currentIndex++;
+        renderQuestion();
+        return;
+      }
 
-  getAllWords(function (words) {
+      displayElement.innerText = "Time Left: " + timeLeft;
+    }, 1000);
+  }
 
-    let totalAttempts = 0;
-    let totalCorrect = 0;
+  function showAnalytics(container) {
+    getAllWords(function (words) {
+      let totalAttempts = 0;
+      let totalCorrect = 0;
 
-    words.forEach(word => {
-      totalAttempts += word.totalAttempts || 0;
-      totalCorrect += word.correctCount || 0;
+      words.forEach(word => {
+        totalAttempts += word.totalAttempts || 0;
+        totalCorrect += word.correctCount || 0;
+      });
+
+      const accuracy = totalAttempts > 0
+        ? ((totalCorrect / totalAttempts) * 100).toFixed(2)
+        : 0;
+
+      const weakest = [...words]
+        .sort((a, b) => (b.wrongCount || 0) - (a.wrongCount || 0))
+        .slice(0, 10);
+
+      const strongest = [...words]
+        .sort((a, b) => (b.correctCount || 0) - (a.correctCount || 0))
+        .slice(0, 5);
+
+      const analyticsDiv = document.createElement("div");
+      analyticsDiv.style.marginTop = "20px";
+      analyticsDiv.style.padding = "15px";
+      analyticsDiv.style.borderTop = "2px solid #ccc";
+
+      analyticsDiv.innerHTML = `
+        <h3>📊 Performance Analytics</h3>
+        <p><strong>Overall Accuracy:</strong> ${accuracy}%</p>
+
+        <h4>⚠ Weakest Words</h4>
+        <ul>
+          ${weakest.map(w => `<li>${w.word} (Wrong: ${w.wrongCount || 0})</li>`).join("")}
+        </ul>
+
+        <h4>🔥 Strongest Words</h4>
+        <ul>
+          ${strongest.map(w => `<li>${w.word} (Correct: ${w.correctCount || 0})</li>`).join("")}
+        </ul>
+      `;
+
+      container.appendChild(analyticsDiv);
     });
+  }
 
-    const accuracy = totalAttempts > 0
-      ? ((totalCorrect / totalAttempts) * 100).toFixed(2)
-      : 0;
+  function calculateAccuracy(word) {
+    const total = word.totalAttempts || 0;
+    if (total === 0) return 0;
+    return ((word.correctCount || 0) / total) * 100;
+  }
 
-    // Sort weakest words
-    const weakest = [...words]
-      .sort((a, b) => (b.wrongCount || 0) - (a.wrongCount || 0))
-      .slice(0, 10);
+  function loadSessionAnalytics() {
+    const container = document.getElementById("analyticsContainer");
+    container.innerHTML = "";
 
-    // Sort strongest words
-    const strongest = [...words]
-      .sort((a, b) => (b.correctCount || 0) - (a.correctCount || 0))
-      .slice(0, 5);
+    const wordTransaction = db.transaction("words", "readonly");
+    const wordStore = wordTransaction.objectStore("words");
+    const wordCountRequest = wordStore.count();
 
-    const analyticsDiv = document.createElement("div");
-    analyticsDiv.style.marginTop = "20px";
-    analyticsDiv.style.padding = "15px";
-    analyticsDiv.style.borderTop = "2px solid #ccc";
+    wordCountRequest.onsuccess = function () {
+      const totalWords = wordCountRequest.result;
 
-    analyticsDiv.innerHTML = `
-      <h3>📊 Performance Analytics</h3>
-      <p><strong>Overall Accuracy:</strong> ${accuracy}%</p>
+      const countCard = document.createElement("div");
+      countCard.className = "analytics-card";
+      countCard.style.borderTop = "4px solid #4caf50";
+      countCard.innerHTML = `
+        <h3>📚 Database Overview</h3>
+        <div class="analytics-row">
+          <span>Total Main Words</span>
+          <span>${totalWords}</span>
+        </div>
+      `;
+      container.appendChild(countCard);
+    };
 
-      <h4>⚠ Weakest Words</h4>
-      <ul>
-        ${weakest.map(w =>
-          `<li>${w.word} (Wrong: ${w.wrongCount || 0})</li>`
-        ).join("")}
-      </ul>
+    const transaction = db.transaction("sessions", "readonly");
+    const store = transaction.objectStore("sessions");
+    const request = store.getAll();
 
-      <h4>🔥 Strongest Words</h4>
-      <ul>
-        ${strongest.map(w =>
-          `<li>${w.word} (Correct: ${w.correctCount || 0})</li>`
-        ).join("")}
-      </ul>
-    `;
+    request.onsuccess = function () {
+      const sessions = request.result;
 
-    container.appendChild(analyticsDiv);
-  });
-}
+      if (!sessions || sessions.length === 0) {
+        const noSession = document.createElement("p");
+        noSession.innerText = "No sessions yet.";
+        noSession.style.marginTop = "20px";
+        container.appendChild(noSession);
+      }
 
-function calculateAccuracy(word) {
-  const total = word.totalAttempts || 0;
-  if (total === 0) return 0;
-  return ((word.correctCount || 0) / total) * 100;
-}
+      const practiceSessions = sessions.filter(s => s.mode === "practice");
+      const examSessions = sessions.filter(s => s.mode === "exam");
 
+      function createCard(title, sessionList, color) {
+        if (sessionList.length === 0) {
+          return `
+            <div class="analytics-card" style="border-top: 4px solid ${color}">
+              <h3>${title}</h3>
+              <p>No sessions yet.</p>
+            </div>
+          `;
+        }
 
-function loadSessionAnalytics() {
+        const totalSessions = sessionList.length;
+        const avgAccuracy = (
+          sessionList.reduce((sum, s) => sum + parseFloat(s.accuracy || 0), 0) /
+          totalSessions
+        ).toFixed(2);
+        const bestScore = Math.max(...sessionList.map(s => s.score || 0));
+        const avgTime = (
+          sessionList.reduce((sum, s) => sum + parseFloat(s.avgTimePerQuestion || 0), 0) /
+          totalSessions
+        ).toFixed(2);
 
-  const container = document.getElementById("analyticsContainer");
-  container.innerHTML = "";
-
-  // ===== TOTAL WORD COUNT =====
-  const wordTransaction = db.transaction("words", "readonly");
-  const wordStore = wordTransaction.objectStore("words");
-  const wordCountRequest = wordStore.count();
-
-  wordCountRequest.onsuccess = function () {
-
-    const totalWords = wordCountRequest.result;
-
-    const countCard = document.createElement("div");
-    countCard.className = "analytics-card";
-    countCard.style.borderTop = "4px solid #4caf50";
-
-    countCard.innerHTML = `
-      <h3>📚 Database Overview</h3>
-      <div class="analytics-row">
-        <span>Total Main Words</span>
-        <span>${totalWords}</span>
-      </div>
-    `;
-
-    container.appendChild(countCard);
-  };
-
-  // ===== LOAD SESSION DATA =====
-  const transaction = db.transaction("sessions", "readonly");
-  const store = transaction.objectStore("sessions");
-  const request = store.getAll();
-
-  request.onsuccess = function () {
-
-    const sessions = request.result;
-
-    if (!sessions || sessions.length === 0) {
-      const noSession = document.createElement("p");
-      noSession.innerText = "No sessions yet.";
-      noSession.style.marginTop = "20px";
-      container.appendChild(noSession);
-    }
-
-    const practiceSessions = sessions.filter(s => s.mode === "practice");
-    const examSessions = sessions.filter(s => s.mode === "exam");
-
-    function createCard(title, sessionList, color) {
-
-      if (sessionList.length === 0) {
         return `
           <div class="analytics-card" style="border-top: 4px solid ${color}">
             <h3>${title}</h3>
-            <p>No sessions yet.</p>
+            <div class="analytics-row"><span>Total Sessions</span><span>${totalSessions}</span></div>
+            <div class="analytics-row"><span>Average Accuracy</span><span>${avgAccuracy}%</span></div>
+            <div class="analytics-row"><span>Best Score</span><span>${bestScore}</span></div>
+            <div class="analytics-row"><span>Avg Time / Question</span><span>${avgTime} sec</span></div>
           </div>
         `;
       }
 
-      const totalSessions = sessionList.length;
-
-      const avgAccuracy = (
-        sessionList.reduce((sum, s) => sum + parseFloat(s.accuracy || 0), 0) /
-        totalSessions
-      ).toFixed(2);
-
-      const bestScore = Math.max(...sessionList.map(s => s.score || 0));
-
-      const avgTime = (
-        sessionList.reduce((sum, s) => sum + parseFloat(s.avgTimePerQuestion || 0), 0) /
-        totalSessions
-      ).toFixed(2);
-
-      return `
-        <div class="analytics-card" style="border-top: 4px solid ${color}">
-          <h3>${title}</h3>
-          <div class="analytics-row"><span>Total Sessions</span><span>${totalSessions}</span></div>
-          <div class="analytics-row"><span>Average Accuracy</span><span>${avgAccuracy}%</span></div>
-          <div class="analytics-row"><span>Best Score</span><span>${bestScore}</span></div>
-          <div class="analytics-row"><span>Avg Time / Question</span><span>${avgTime} sec</span></div>
-        </div>
+      const analyticsGrid = document.createElement("div");
+      analyticsGrid.className = "analytics-grid";
+      analyticsGrid.innerHTML = `
+        ${createCard("📘 Practice Performance", practiceSessions, "#00c8ff")}
+        ${createCard("📕 Exam Performance", examSessions, "#ff1a1a")}
       `;
-    }
+      container.appendChild(analyticsGrid);
 
-    const analyticsGrid = document.createElement("div");
-    analyticsGrid.className = "analytics-grid";
+      const chartContainer = document.getElementById("uploadChartContainer");
+      chartContainer.innerHTML = "<h3>📊 Words Uploaded (Last 7 Days)</h3>";
 
-    analyticsGrid.innerHTML = `
-      ${createCard("📘 Practice Performance", practiceSessions, "#00c8ff")}
-      ${createCard("📕 Exam Performance", examSessions, "#ff1a1a")}
-    `;
+      const wordTx = db.transaction("words", "readonly");
+      const wordStore = wordTx.objectStore("words");
+      const wordReq = wordStore.getAll();
 
-    container.appendChild(analyticsGrid);
+      wordReq.onsuccess = function () {
+        const words = wordReq.result;
+        const today = new Date();
+        const last7Days = [];
 
-    // ===== LAST 7 DAYS UPLOAD CHART =====
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date();
+          date.setDate(today.getDate() - i);
 
-    const chartContainer = document.getElementById("uploadChartContainer");
-    chartContainer.innerHTML = "<h3>📊 Words Uploaded (Last 7 Days)</h3>";
+          const key = date.toISOString().split("T")[0];
+          const weekday = date.toLocaleDateString(undefined, { weekday: "short" });
+          const dayMonth = date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
-    const wordTx = db.transaction("words", "readonly");
-    const wordStore = wordTx.objectStore("words");
-    const wordReq = wordStore.getAll();
-
-    wordReq.onsuccess = function () {
-
-      const words = wordReq.result;
-      const today = new Date();
-
-      // Prepare last 7 days map
-      const last7Days = [];
-
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(today.getDate() - i);
-
-        const key = date.toISOString().split("T")[0];
-
-        const weekday = date.toLocaleDateString(undefined, {
-          weekday: "short"
-        });
-
-        const dayMonth = date.toLocaleDateString(undefined, {
-          day: "numeric",
-          month: "short"
-        });
-
-        last7Days.push({
-          date: key,
-          label: `${weekday}<br>${dayMonth}`,
-          count: 0
-        });
-      }
-
-      // Count words per day
-      words.forEach(word => {
-        const created = new Date(word.createdAt).toISOString().split("T")[0];
-
-        const dayObj = last7Days.find(d => d.date === created);
-        if (dayObj) {
-          dayObj.count++;
+          last7Days.push({
+            date: key,
+            label: `${weekday}<br>${dayMonth}`,
+            count: 0
+          });
         }
-      });
 
-      // Find max count for scaling
-      const maxCount = Math.max(...last7Days.map(d => d.count), 1);
+        words.forEach(word => {
+          const created = new Date(word.createdAt).toISOString().split("T")[0];
+          const dayObj = last7Days.find(d => d.date === created);
+          if (dayObj) dayObj.count++;
+        });
 
-      const chartHTML = last7Days.map(day => {
+        const maxCount = Math.max(...last7Days.map(d => d.count), 1);
 
-        const heightPercent = (day.count / maxCount) * 100;
+        const chartHTML = last7Days.map(day => {
+          const heightPercent = (day.count / maxCount) * 100;
+          return `
+            <div class="upload-bar-wrapper">
+              <div class="upload-bar" style="height:${heightPercent}%"></div>
+              <span class="upload-count">${day.count}</span>
+              <span class="upload-label">${day.label}</span>
+            </div>
+          `;
+        }).join("");
 
-        return `
-          <div class="upload-bar-wrapper">
-            <div class="upload-bar" style="height:${heightPercent}%"></div>
-            <span class="upload-count">${day.count}</span>
-            <span class="upload-label">${day.label}</span>
+        chartContainer.innerHTML += `
+          <div class="upload-chart">
+            ${chartHTML}
           </div>
         `;
-      }).join("");
-
-      chartContainer.innerHTML += `
-        <div class="upload-chart">
-          ${chartHTML}
-        </div>
-      `;
+      };
     };
-
-  };
-}
-
-
-function updateLastAsked(wordId) {
-
-  const transaction = db.transaction("words", "readwrite");
-  const store = transaction.objectStore("words");
-
-  const request = store.get(wordId);
-
-  request.onsuccess = function () {
-    const word = request.result;
-    if (!word) return;
-
-    word.lastAsked = Date.now();
-    store.put(word);
-  };
-}
-
-
-const fileInput = document.getElementById("excelFile");
-const customFileBtn = document.getElementById("customFileBtn");
-const fileNameDisplay = document.getElementById("fileName");
-
-customFileBtn.addEventListener("click", () => {
-  fileInput.click();
-});
-
-fileInput.addEventListener("change", () => {
-  if (fileInput.files.length > 0) {
-    fileNameDisplay.textContent = fileInput.files[0].name;
-  } else {
-    fileNameDisplay.textContent = "No file selected";
   }
-});
 
-/***********************
-  FOCUS MODE FUNCTIONS
-************************/
+  function updateLastAsked(wordId) {
+    const transaction = db.transaction("words", "readwrite");
+    const store = transaction.objectStore("words");
+    const request = store.get(wordId);
 
-function enterFocusMode() {
-  const focus = document.getElementById("focusMode");
+    request.onsuccess = function () {
+      const word = request.result;
+      if (!word) return;
+      word.lastAsked = Date.now();
+      store.put(word);
+    };
+  }
 
-  focus.classList.add("active");
-  document.body.classList.add("locked");
-}
+  const fileInput = document.getElementById("excelFile");
+  const customFileBtn = document.getElementById("customFileBtn");
+  const fileNameDisplay = document.getElementById("fileName");
 
+  customFileBtn.addEventListener("click", () => {
+    fileInput.click();
+  });
 
-function endQuiz() {
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length > 0) {
+      fileNameDisplay.textContent = fileInput.files[0].name;
+    } else {
+      fileNameDisplay.textContent = "No file selected";
+    }
+  });
 
-  clearInterval(timerInterval);
-  timerInterval = null;
-  quizEndTime = Date.now();
+  /***********************
+    FOCUS MODE FUNCTIONS
+  ************************/
+  function enterFocusMode() {
+    const focus = document.getElementById("focusMode");
+    focus.classList.add("active");
+    document.body.classList.add("locked");
+  }
 
-  const container = document.getElementById("focusContent");
-  container.innerHTML = "";
+  function endQuiz() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    quizEndTime = Date.now();
 
-  const totalQuestions = sessionResults.length;
-  const correctCount = sessionResults.filter(r => r.isCorrect).length;
-  const wrongCount = totalQuestions - correctCount;
+    const container = document.getElementById("focusContent");
+    container.innerHTML = "";
 
-  const accuracy = totalQuestions > 0
-    ? ((correctCount / totalQuestions) * 100).toFixed(2)
-    : 0;
+    const totalQuestions = sessionResults.length;
+    const correctCount = sessionResults.filter(r => r.isCorrect).length;
+    const wrongCount = totalQuestions - correctCount;
 
-  const totalTimeMs = quizEndTime - quizStartTime;
-  const totalTimeSec = Math.floor(totalTimeMs / 1000);
-  const avgTimePerQuestion = totalQuestions > 0
-    ? (totalTimeSec / totalQuestions).toFixed(2)
-    : 0;
+    const accuracy = totalQuestions > 0
+      ? ((correctCount / totalQuestions) * 100).toFixed(2)
+      : 0;
 
-  const finalScore = score.toFixed(2);
-  const maxScore = totalQuestions;
+    const totalTimeSec = Math.floor((quizEndTime - quizStartTime) / 1000);
+    const avgTimePerQuestion = totalQuestions > 0
+      ? (totalTimeSec / totalQuestions).toFixed(2)
+      : 0;
 
-  const summary = document.createElement("div");
-  summary.className = "exam-summary";
+    const finalScore = score.toFixed(2);
+    const maxScore = totalQuestions;
 
-  summary.innerHTML = `
+    const summary = document.createElement("div");
+    summary.className = "exam-summary";
 
-    <div class="result-card">
-
-      <h2>${examMode ? "Exam Result" : "Practice Summary"}</h2>
-
-      ${examMode ? `
-        <div class="score-box">
-          ${finalScore} / ${maxScore}
+    summary.innerHTML = `
+      <div class="result-card">
+        <h2>${examMode ? "Exam Result" : "Practice Summary"}</h2>
+        ${examMode ? `<div class="score-box">${finalScore} / ${maxScore}</div>` : ""}
+        <div class="result-grid">
+          <div><span>Total Questions</span><strong>${totalQuestions}</strong></div>
+          <div><span>Correct</span><strong>${correctCount}</strong></div>
+          <div><span>Wrong</span><strong>${wrongCount}</strong></div>
+          <div><span>Accuracy</span><strong>${accuracy}%</strong></div>
+          <div><span>Total Time</span><strong>${totalTimeSec} sec</strong></div>
+          <div><span>Avg Time / Question</span><strong>${avgTimePerQuestion} sec</strong></div>
         </div>
-      ` : ""}
-
-      <div class="result-grid">
-
-        <div>
-          <span>Total Questions</span>
-          <strong>${totalQuestions}</strong>
-        </div>
-
-        <div>
-          <span>Correct</span>
-          <strong>${correctCount}</strong>
-        </div>
-
-        <div>
-          <span>Wrong</span>
-          <strong>${wrongCount}</strong>
-        </div>
-
-        <div>
-          <span>Accuracy</span>
-          <strong>${accuracy}%</strong>
-        </div>
-
-        <div>
-          <span>Total Time</span>
-          <strong>${totalTimeSec} sec</strong>
-        </div>
-
-        <div>
-          <span>Avg Time / Question</span>
-          <strong>${avgTimePerQuestion} sec</strong>
-        </div>
-
       </div>
 
-    </div>
+      <hr style="margin:30px 0;">
+      <h3>Words Done Wrong</h3>
+    `;
 
-    <hr style="margin:30px 0;">
-    <h3>Words Done Wrong</h3>
-  `;
+    container.appendChild(summary);
 
-  container.appendChild(summary);
+    const wrongWords = sessionResults.filter(r => !r.isCorrect);
 
-  const wrongWords = sessionResults.filter(r => !r.isCorrect);
+    if (wrongWords.length === 0) {
+      const perfect = document.createElement("p");
+      perfect.innerHTML = "🔥 <strong>Perfect Session!</strong> No wrong answers.";
+      container.appendChild(perfect);
+    } else {
+      wrongWords.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "wrong-word-card";
+        div.innerHTML = `
+          <strong class="wrong-word-title">${item.word}</strong><br>
+          <span class="wrong-label">Your Answer:</span> 
+            ${item.selectedAnswers.length > 0 ? item.selectedAnswers.join(", ") : "None"}<br>
+          <span class="correct-label">Correct Answer:</span> 
+            ${item.correctAnswers.join(", ")}
+        `;
+        container.appendChild(div);
+      });
+    }
 
-  if (wrongWords.length === 0) {
+    const exitBtn = document.createElement("button");
+    exitBtn.innerText = "Return to Dashboard";
+    exitBtn.style.marginTop = "30px";
+    exitBtn.onclick = exitFocusMode;
+    container.appendChild(exitBtn);
 
-    const perfect = document.createElement("p");
-    perfect.innerHTML = "🔥 <strong>Perfect Session!</strong> No wrong answers.";
-    container.appendChild(perfect);
-
-  } else {
-
-    wrongWords.forEach(item => {
-
-      const div = document.createElement("div");
-      div.className = "wrong-word-card";
-
-      div.innerHTML = `
-        <strong class="wrong-word-title">${item.word}</strong><br>
-        <span class="wrong-label">Your Answer:</span> 
-          ${item.selectedAnswers.length > 0 ? item.selectedAnswers.join(", ") : "None"}<br>
-        <span class="correct-label">Correct Answer:</span> 
-          ${item.correctAnswers.join(", ")}
-      `;
-
-      container.appendChild(div);
+    addSessionToDB({
+      mode: examMode ? "exam" : "practice",
+      score: score,
+      totalQuestions: totalQuestions,
+      correct: correctCount,
+      wrong: wrongCount,
+      accuracy: accuracy,
+      totalTimeSec: totalTimeSec,
+      avgTimePerQuestion: avgTimePerQuestion,
+      date: new Date(),
+      timestamp: Date.now()
+    }, function () {
+      loadSessionAnalytics();
     });
   }
 
-  const exitBtn = document.createElement("button");
-  exitBtn.innerText = "Return to Dashboard";
-  exitBtn.style.marginTop = "30px";
-  exitBtn.onclick = exitFocusMode;
-  container.appendChild(exitBtn);
+  function exitFocusMode() {
+    clearInterval(timerInterval);
+    timerInterval = null;
 
-  addSessionToDB({
-    mode: examMode ? "exam" : "practice",
-    score: score,
-    totalQuestions: totalQuestions,
-    correct: correctCount,
-    wrong: wrongCount,
-    accuracy: accuracy,
-    totalTimeSec: totalTimeSec,
-    avgTimePerQuestion: avgTimePerQuestion,
-    date: new Date(),
-    timestamp: Date.now()
-  }, function () {
-    loadSessionAnalytics();
-  });
-
-}
-
-function exitFocusMode() {
-  clearInterval(timerInterval); // FIX 5: kill timer on manual exit too
-  timerInterval = null;
-
-  const focus = document.getElementById("focusMode");
-
-  focus.classList.remove("active");
-  document.body.classList.remove("locked");
-
-  document.getElementById("focusContent").innerHTML = "";
-}
-
-
-setTimeout(() => {
-  loadSessionAnalytics();
-}, 500);
-
-function masterDeleteAllData() {
-
-  const password = prompt("Enter Master Password:");
-
-  if (password !== "552554") {
-    alert("Incorrect Password!");
-    return;
+    const focus = document.getElementById("focusMode");
+    focus.classList.remove("active");
+    document.body.classList.remove("locked");
+    document.getElementById("focusContent").innerHTML = "";
   }
 
-  if (!confirm("This will permanently delete ALL data. Are you absolutely sure?")) {
-    return;
-  }
-
-  const transaction = db.transaction(["words", "sessions"], "readwrite");
-
-  const wordsStore = transaction.objectStore("words");
-  const sessionsStore = transaction.objectStore("sessions");
-
-  wordsStore.clear();
-  sessionsStore.clear();
-
-  transaction.oncomplete = function () {
-    alert("All data deleted successfully.");
-
-    // Refresh analytics after deletion
+  setTimeout(() => {
     loadSessionAnalytics();
-    
-  };
+  }, 500);
 
-  transaction.onerror = function () {
-    alert("Error deleting data.");
-  };
-}
-
-document.getElementById("masterDeleteBtn")
-  .addEventListener("click", masterDeleteAllData);
-
-// ===== EXPORT ALL DATA =====
-function exportAllData() {
-  getAllWords(function (words) {
-    if (!words || words.length === 0) {
-      alert("No data to export.");
+  function masterDeleteAllData() {
+    const password = prompt("Enter Master Password:");
+    if (password !== "552554") {
+      alert("Incorrect Password!");
       return;
     }
 
-    const rows = words.map(w => ({
-  Word: w.word,
-  Meaning: (w.meanings || []).join(", "),
-  Phonetics: w.phonetics || "",
-  Note: w.note || "" // ✅ NEW COLUMN
-}));
+    if (!confirm("This will permanently delete ALL data. Are you absolutely sure?")) {
+      return;
+    }
 
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Vocabulary");
+    const transaction = db.transaction(["words", "sessions"], "readwrite");
+    const wordsStore = transaction.objectStore("words");
+    const sessionsStore = transaction.objectStore("sessions");
 
-    const fileName = "vocab_export_" + new Date().toISOString().split("T")[0] + ".xlsx";
-    XLSX.writeFile(workbook, fileName);
-  });
-}
+    wordsStore.clear();
+    sessionsStore.clear();
 
-document.getElementById("exportBtn")
-  .addEventListener("click", exportAllData);
+    transaction.oncomplete = function () {
+      alert("All data deleted successfully.");
+      loadSessionAnalytics();
+    };
 
-// ===== THEME SYSTEM =====
+    transaction.onerror = function () {
+      alert("Error deleting data.");
+    };
+  }
 
-const themeBtn = document.getElementById("themeToggleBtn");
+  document.getElementById("masterDeleteBtn")
+    .addEventListener("click", masterDeleteAllData);
 
-// Load saved theme
-const savedTheme = localStorage.getItem("theme");
+  function exportAllData() {
+    getAllWords(function (words) {
+      if (!words || words.length === 0) {
+        alert("No data to export.");
+        return;
+      }
 
-if (savedTheme === "light") {
-  document.body.classList.add("light-mode");
-  themeBtn.innerText = "☀ Light Mode";
-} else {
-  themeBtn.innerText = "🌙 Dark Mode";
-}
+      const rows = words.map(w => ({
+        Word: w.word,
+        Meaning: (w.meanings || []).join(", "),
+        Phonetics: w.phonetics || "",
+        Note: w.note || ""
+      }));
 
-themeBtn.addEventListener("click", function () {
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Vocabulary");
 
-  document.body.classList.toggle("light-mode");
+      const fileName = "vocab_export_" + new Date().toISOString().split("T")[0] + ".xlsx";
+      XLSX.writeFile(workbook, fileName);
+    });
+  }
 
-  if (document.body.classList.contains("light-mode")) {
-    localStorage.setItem("theme", "light");
+  document.getElementById("exportBtn")
+    .addEventListener("click", exportAllData);
+
+  // ===== THEME SYSTEM =====
+  const themeBtn = document.getElementById("themeToggleBtn");
+  const savedTheme = localStorage.getItem("theme");
+
+  if (savedTheme === "light") {
+    document.body.classList.add("light-mode");
     themeBtn.innerText = "☀ Light Mode";
   } else {
-    localStorage.setItem("theme", "dark");
     themeBtn.innerText = "🌙 Dark Mode";
   }
 
-});
+  themeBtn.addEventListener("click", function () {
+    document.body.classList.toggle("light-mode");
 
-function updateWordStats(wordId, performanceScore) {
-
-  const transaction = db.transaction("words", "readwrite");
-  const store = transaction.objectStore("words");
-  const request = store.get(wordId);
-
-  request.onsuccess = function () {
-
-    const word = request.result;
-    if (!word) return;
-
-    word.totalAttempts = (word.totalAttempts || 0) + 1;
-
-    const now = Date.now();
-
-    if (performanceScore <= 0) {
-      word.wrongCount = (word.wrongCount || 0) + 1;
-      word.reviewInterval = 1;
+    if (document.body.classList.contains("light-mode")) {
+      localStorage.setItem("theme", "light");
+      themeBtn.innerText = "☀ Light Mode";
+    } else {
+      localStorage.setItem("theme", "dark");
+      themeBtn.innerText = "🌙 Dark Mode";
     }
+  });
 
-    else if (performanceScore < 1) {
-      word.correctCount = (word.correctCount || 0) + 1;
-      word.reviewInterval = 2;
-    }
+  function updateWordStats(wordId, performanceScore) {
+    const transaction = db.transaction("words", "readwrite");
+    const store = transaction.objectStore("words");
+    const request = store.get(wordId);
 
-    else {
-      word.correctCount = (word.correctCount || 0) + 1;
-      word.reviewInterval = Math.min((word.reviewInterval || 1) * 2, 14);
-    }
+    request.onsuccess = function () {
+      const word = request.result;
+      if (!word) return;
 
-    word.nextReviewDate = now + (word.reviewInterval * 24 * 60 * 60 * 1000);
+      word.totalAttempts = (word.totalAttempts || 0) + 1;
 
-    store.put(word);
-  };
-}
+      const now = Date.now();
+
+      if (performanceScore <= 0) {
+        word.wrongCount = (word.wrongCount || 0) + 1;
+        word.reviewInterval = 1;
+      } else if (performanceScore < 1) {
+        word.correctCount = (word.correctCount || 0) + 1;
+        word.reviewInterval = 2;
+      } else {
+        word.correctCount = (word.correctCount || 0) + 1;
+        word.reviewInterval = Math.min((word.reviewInterval || 1) * 2, 14);
+      }
+
+      word.nextReviewDate = now + (word.reviewInterval * 24 * 60 * 60 * 1000);
+      store.put(word);
+    };
+  }
 
 });
