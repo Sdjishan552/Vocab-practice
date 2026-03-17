@@ -88,7 +88,9 @@ document.getElementById("searchInput").addEventListener("input", function () {
 function buildSearchIndex(words) {
   return words.map(word => {
     const combinedText = (
-      word.word + " " + word.meanings.join(" ")
+      word.word + " " +
+      word.meanings.join(" ") + " " +
+      (word.note || "")
     ).toLowerCase();
 
     return {
