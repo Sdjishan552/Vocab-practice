@@ -1,233 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vocabulary Book</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vocab Practice Engine</title>
+
+  <!-- PWA -->
+<link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#ff1a1a" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Excel Library -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 </head>
-<body class="book-page">
 
-<header class="book-header">
+<body>
 
-  <div class="header-left">
-    <h1>📖 Vocabulary Book</h1>
-  </div>
+<!-- ================= HEADER ================= -->
+<header>
+  <h1>📘 Vocab Practice Engine</h1>
 
-  <div class="header-center" id="searchNavigator" style="display:none;">
-    <button id="prevMatch">⬅ Prev</button>
-    <span id="matchCounter" style="margin:0 10px;"></span>
-    <button id="nextMatch">Next ➡</button>
-  </div>
-
-  <div class="header-right">
-    <a href="index.html">
-      <button>← Back to Dashboard</button>
-    </a>
-  </div>
-
+  <button id="themeToggleBtn" class="theme-toggle">
+    🌙 Dark Mode
+  </button>
 </header>
 
+<!-- ================= NAVIGATION ================= -->
+<nav>
+  <button onclick="showSection('upload')">Upload</button>
+  <button onclick="showSection('practice')">Practice</button>
+  <button onclick="showSection('exam')">Exam</button>
+  <button onclick="showSection('analytics')">Analytics</button>
+</nav>
 
-<div class="book-filter">
-  <select id="dateFilter">
-    <option value="all">All Words</option>
-    <option value="1">Last 1 Day</option>
-    <option value="3">Last 3 Days</option>
-    <option value="7">Last 7 Days</option>
-    <option value="10">Last 10 Days</option>
-    <option value="30">Last 30 Days</option>
-  </select>
+<!-- ================= UPLOAD ================= -->
+<section id="upload" class="section active">
+  <h2>Upload Excel</h2>
 
-  <input type="text" id="searchInput" placeholder="Search word..." class="book-search">
+  <div class="file-upload-wrapper">
+    <input type="file" id="excelFile" accept=".xlsx,.xls" hidden />
+
+    <button type="button" id="customFileBtn">
+      📁 Select Excel File
+    </button>
+
+    <span id="fileName">No file selected</span>
+
+    <button id="uploadBtn">
+      🚀 Upload & Save
+    </button>
+  </div>
+
+  <div id="uploadStatus"></div>
+</section>
+
+<!-- ================= PRACTICE ================= -->
+<section id="practice" class="section">
+  <h2>Practice Mode</h2>
+
+  <label>
+    Questions:
+    <input type="number" id="practiceCountInput" value="20" min="5" />
+  </label>
+
+  <button id="startPractice">Start Practice</button>
+  <button id="startWeakMode">Weak Mode</button>
+
+  <div id="practiceContainer"></div>
+</section>
+
+<!-- ================= EXAM ================= -->
+<section id="exam" class="section">
+  <h2>Exam Mode</h2>
+
+  <label>
+    Timer per Question (seconds):
+    <input type="number" id="examTimerInput" value="30" min="5" />
+  </label>
+
+  <button id="startExam">Start Exam</button>
+
+  <div id="examContainer"></div>
+</section>
+
+<!-- ================= ANALYTICS ================= -->
+<section id="analytics" class="section">
+  <h2>📈 Analytics</h2>
+
+  <!-- Book Mode Button -->
+  <a href="book.html" class="book-mode-card">
+  📖 Open Vocabulary Book
+</a>
+
+
+
+  <div id="analyticsContainer"></div>
+  <div id="uploadChartContainer" style="margin-top:30px;"></div>
+
+  <div style="margin-top:30px; text-align:center; display:flex; gap:15px; justify-content:center; flex-wrap:wrap;">
+    <button id="exportBtn" class="export-btn">
+      📤 Export All Data
+    </button>
+    <button id="masterDeleteBtn" class="danger-btn">
+      🔥 Master Delete All Data
+    </button>
+  </div>
+</section>
+
+
+
+<!-- ================= DEBUG ================= -->
+ 
+
+<!-- ================= FOCUS MODE ================= -->
+<div id="focusMode">
+  <div id="focusContent"></div>
 </div>
 
-<!-- SEARCH NAVIGATOR -->
+<!-- ================= MAIN SCRIPT ================= -->
+<script src="app.js"></script>
 
-
-<div id="bookContainer" class="book-container"></div>
-
+<!-- ================= SERVICE WORKER ================= -->
 <script>
-
-// ===== LOAD SAVED THEME =====
-const savedTheme = localStorage.getItem("theme");
-if (savedTheme === "light") {
-  document.body.classList.add("light-mode");
-}
-
-let db;
-
-const request = indexedDB.open("VocabDB", 2);
-
-request.onsuccess = function () {
-  db = request.result;
-  loadBook("all");
-};
-
-// Filter change
-document.getElementById("dateFilter").addEventListener("change", function () {
-  loadBook(this.value);
-});
-
-// Search input
-document.getElementById("searchInput").addEventListener("input", function () {
-  const filterDays = document.getElementById("dateFilter").value;
-  loadBook(filterDays);
-});
-
-// ===== BUILD SEARCH INDEX =====
-function buildSearchIndex(words) {
-  return words.map(word => {
-    const combinedText = (
-      word.word + " " + word.meanings.join(" ")
-    ).toLowerCase();
-
-    return {
-      mainWord: word.word,
-      searchableText: combinedText
-    };
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+navigator.serviceWorker.register("service-worker.js")
+      .then(reg => {
+        console.log("Service Worker registered. Scope:", reg.scope);
+      })
+      .catch(err => {
+        console.error("Service Worker registration failed:", err);
+      });
   });
 }
-
-function loadBook(filterDays) {
-
-  const container = document.getElementById("bookContainer");
-  const searchNavigator = document.getElementById("searchNavigator");
-
-  container.innerHTML = "";
-  searchNavigator.style.display = "none";
-
-  const transaction = db.transaction("words", "readonly");
-  const store = transaction.objectStore("words");
-  const req = store.getAll();
-
-  req.onsuccess = function () {
-
-    let words = req.result;
-    const searchText = document.getElementById("searchInput").value.toLowerCase().trim();
-
-    // ===== SEARCH FILTER =====
-    if (searchText !== "") {
-
-      const indexedWords = buildSearchIndex(words);
-
-      const matches = indexedWords.filter(entry =>
-        entry.searchableText.includes(searchText)
-      );
-
-      words = matches.map(entry =>
-        words.find(w => w.word === entry.mainWord)
-      );
-    }
-
-    if (!words || words.length === 0) {
-      container.innerHTML = "<p>No words found.</p>";
-      return;
-    }
-
-    // ===== DATE FILTER =====
-    if (filterDays !== "all") {
-      const days = parseInt(filterDays);
-      const now = Date.now();
-      const cutoff = now - (days * 24 * 60 * 60 * 1000);
-
-      words = words.filter(word =>
-        new Date(word.createdAt).getTime() >= cutoff
-      );
-    }
-
-    if (words.length === 0) {
-      container.innerHTML = "<p>No words found for selected filter.</p>";
-      return;
-    }
-
-    // ===== SORT ALPHABETICALLY =====
-    words.sort((a, b) => a.word.localeCompare(b.word));
-
-    let currentLetter = "";
-
-    words.forEach(wordObj => {
-
-      const firstLetter = wordObj.word.charAt(0).toUpperCase();
-
-      if (firstLetter !== currentLetter) {
-        currentLetter = firstLetter;
-
-        const letter = document.createElement("h2");
-        letter.className = "alphabet-title";
-        letter.innerText = currentLetter;
-        container.appendChild(letter);
-      }
-
-      const card = document.createElement("div");
-      card.className = "book-word";
-
-      const meanings = wordObj.meanings
-        .map(m => `<li>${m}</li>`)
-        .join("");
-
-      card.innerHTML = `
-        <h3>${wordObj.word}</h3>
-        <ul>${meanings}</ul>
-      `;
-
-      container.appendChild(card);
-    });
-
-    // ===== SEARCH NAVIGATION (AFTER RENDERING) =====
-    if (searchText !== "") {
-
-      const matchedElements = Array.from(
-        document.querySelectorAll(".book-word")
-      );
-
-      if (matchedElements.length > 0) {
-
-        let currentMatchIndex = 0;
-
-        searchNavigator.style.display = "block";
-
-        function highlightMatch(index) {
-
-          matchedElements.forEach(el =>
-            el.classList.remove("active-match")
-          );
-
-          const element = matchedElements[index];
-          element.classList.add("active-match");
-
-          const containerTop = container.getBoundingClientRect().top;
-const elementTop = element.getBoundingClientRect().top;
-
-container.scrollBy({
-  top: elementTop - containerTop - 100,
-  behavior: "smooth"
-});
-
-
-          document.getElementById("matchCounter").innerText =
-            `${index + 1} / ${matchedElements.length}`;
-        }
-
-        highlightMatch(0);
-
-        document.getElementById("nextMatch").onclick = function () {
-          currentMatchIndex =
-            (currentMatchIndex + 1) % matchedElements.length;
-          highlightMatch(currentMatchIndex);
-        };
-
-        document.getElementById("prevMatch").onclick = function () {
-          currentMatchIndex =
-            (currentMatchIndex - 1 + matchedElements.length) %
-            matchedElements.length;
-          highlightMatch(currentMatchIndex);
-        };
-      }
-    }
-  };
-}
-
 </script>
 
 </body>
