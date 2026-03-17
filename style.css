@@ -734,3 +734,23 @@ body.book-page {
   margin-bottom: 8px;
   letter-spacing: 0.5px;
 }
+.word-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.edit-note-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.note-box {
+  margin-top: 8px;
+  padding: 8px;
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  font-size: 14px;
+}
