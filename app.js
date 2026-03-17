@@ -42,8 +42,7 @@ function initDB() {
   document.getElementById("startWeakMode").disabled = true;
   document.getElementById("uploadBtn").disabled = true;
 
-const request = indexedDB.open("VocabDB", 2);
-
+const request = indexedDB.open("VocabDB", 3);
   request.onerror = function () {
     logDebug("Database failed to open");
   };
@@ -217,24 +216,28 @@ jsonData.forEach(row => {
       if (newPhonetics && !existingWord.phonetics) {
         existingWord.phonetics = newPhonetics;
       }
-
+      // ✅ ADD THIS
+      if (row.Note && row.Note.trim() !== "") {
+        existingWord.note = row.Note.trim();
+      }
       store.put(existingWord);
 
     } else {
 
       const wordObject = {
-        word: mainWord,
-        meanings: [...new Set(newMeanings)],
-        phonetics: newPhonetics,
-        wrongCount: 0,
-        correctCount: 0,
-        totalAttempts: 0,
-        lastAsked: null,
-        reviewInterval: 1,
-        nextReviewDate: Date.now(),
-        batchId: batchId,
-        createdAt: new Date()
-      };
+  word: mainWord,
+  meanings: [...new Set(newMeanings)],
+  phonetics: newPhonetics,
+  note: row.Note ? row.Note.trim() : "",  // ✅ NEW
+  wrongCount: 0,
+  correctCount: 0,
+  totalAttempts: 0,
+  lastAsked: null,
+  reviewInterval: 1,
+  nextReviewDate: Date.now(),
+  batchId: batchId,
+  createdAt: new Date()
+};
 
       store.add(wordObject);
       addedCount++;
@@ -1047,7 +1050,66 @@ function loadSessionAnalytics() {
 
   };
 }
+function loadBookMode() {
 
+  const container = document.getElementById("bookContainer");
+  container.innerHTML = "";
+
+  getAllWords(function (words) {
+
+    if (!words || words.length === 0) {
+      container.innerHTML = "<p>No words available.</p>";
+      return;
+    }
+
+    words.forEach(word => {
+
+      const wordCard = document.createElement("div");
+      wordCard.className = "word-card";
+
+      // ✏️ NOTE BUTTON
+      const noteBtn = document.createElement("button");
+      noteBtn.innerText = "✏️";
+      noteBtn.className = "note-btn";
+
+      noteBtn.onclick = function () {
+        editNote(word.id);
+      };
+
+      wordCard.appendChild(noteBtn);
+
+      // WORD TITLE
+      const title = document.createElement("h3");
+      title.innerText = word.word;
+      wordCard.appendChild(title);
+
+      // PHONETICS
+      if (word.phonetics) {
+        const phon = document.createElement("div");
+        phon.innerText = word.phonetics;
+        phon.className = "phonetics-badge";
+        wordCard.appendChild(phon);
+      }
+
+      // MEANINGS
+      const meaningDiv = document.createElement("div");
+      meaningDiv.innerText = (word.meanings || []).join(", ");
+      wordCard.appendChild(meaningDiv);
+
+      // 📝 NOTE DISPLAY
+      if (word.note) {
+        const noteDiv = document.createElement("div");
+        noteDiv.className = "note-display";
+        noteDiv.innerText = "📝 " + word.note;
+        wordCard.appendChild(noteDiv);
+      }
+
+      container.appendChild(wordCard);
+
+    });
+
+  });
+}
 
 function updateLastAsked(wordId) {
 
@@ -1291,7 +1353,8 @@ function exportAllData() {
     const rows = words.map(w => ({
       Word: w.word,
       Meaning: (w.meanings || []).join(", "),
-      Phonetics: w.phonetics || ""
+      Phonetics: w.phonetics || "",
+      Note: w.note || ""   // ✅ NEW COLUMN
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -1369,5 +1432,31 @@ function updateWordStats(wordId, performanceScore) {
     store.put(word);
   };
 }
+function editNote(wordId) {
 
+  const transaction = db.transaction("words", "readwrite");
+  const store = transaction.objectStore("words");
+
+  const request = store.get(wordId);
+
+  request.onsuccess = function () {
+
+    const word = request.result;
+    if (!word) return;
+
+    const newNote = prompt(
+      "✏️ Add / Edit Note:",
+      word.note || ""
+    );
+
+    if (newNote !== null) {
+      word.note = newNote.trim();
+      store.put(word);
+
+      alert("Note saved!");
+      loadBookMode(); // refresh UI
+    }
+
+  };
+}
 });
