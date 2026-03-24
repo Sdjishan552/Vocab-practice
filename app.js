@@ -3,7 +3,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function logDebug(message) {
     console.log("[DEBUG]:", message);
   }
- 
+
 
   /***********************
     SECTION SWITCHING
@@ -186,9 +186,14 @@ jsonData.forEach(row => {
 
   const mainWord = row.Word ? row.Word.trim() : "";
   const newMeanings = row.Meaning
-    ? row.Meaning.split(",").map(m => m.trim())
+    ? row.Meaning.split(",").map(m => m.trim()).filter(m => m !== "")
     : [];
   const newPhonetics = row.Phonetics ? row.Phonetics.trim() : "";
+
+  // ===== ANTONYMS PARSING =====
+  const newAntonyms = row.Antonyms
+    ? row.Antonyms.split(",").map(a => a.trim()).filter(a => a !== "")
+    : [];
 
   if (mainWord === "") return;
 
@@ -204,19 +209,17 @@ jsonData.forEach(row => {
       const existingWord = existingWords[0];
 
       const existingMeanings = existingWord.meanings || [];
-
-      const mergedMeanings = [
-        ...new Set([
-          ...existingMeanings,
-          ...newMeanings
-        ])
-      ];
-
+      const mergedMeanings = [...new Set([...existingMeanings, ...newMeanings])];
       existingWord.meanings = mergedMeanings;
+
+      // ===== MERGE ANTONYMS =====
+      const existingAntonyms = existingWord.antonyms || [];
+      const mergedAntonyms = [...new Set([...existingAntonyms, ...newAntonyms])];
+      existingWord.antonyms = mergedAntonyms;
+
       if (newPhonetics && !existingWord.phonetics) {
         existingWord.phonetics = newPhonetics;
       }
-      // ✅ ADD THIS
       if (row.Note && row.Note.trim() !== "") {
         existingWord.note = row.Note.trim();
       }
@@ -225,19 +228,20 @@ jsonData.forEach(row => {
     } else {
 
       const wordObject = {
-  word: mainWord,
-  meanings: [...new Set(newMeanings)],
-  phonetics: newPhonetics,
-  note: row.Note ? row.Note.trim() : "",  // ✅ NEW
-  wrongCount: 0,
-  correctCount: 0,
-  totalAttempts: 0,
-  lastAsked: null,
-  reviewInterval: 1,
-  nextReviewDate: Date.now(),
-  batchId: batchId,
-  createdAt: new Date()
-};
+        word: mainWord,
+        meanings: [...new Set(newMeanings)],
+        antonyms: [...new Set(newAntonyms)],   // ===== ANTONYMS STORED =====
+        phonetics: newPhonetics,
+        note: row.Note ? row.Note.trim() : "",
+        wrongCount: 0,
+        correctCount: 0,
+        totalAttempts: 0,
+        lastAsked: null,
+        reviewInterval: 1,
+        nextReviewDate: Date.now(),
+        batchId: batchId,
+        createdAt: new Date()
+      };
 
       store.add(wordObject);
       addedCount++;
@@ -294,13 +298,14 @@ document.getElementById("startPractice").addEventListener("click", function () {
   startQuiz(count, false);
 });
 document.getElementById("startWeakMode").addEventListener("click", function () {
-  startWeakDrill(20); // 20 weak questions
+  startWeakDrill(20);
 });
 
 // Start Exam
 document.getElementById("startExam").addEventListener("click", function () {
 startQuiz(50, true);
 });
+
 function shuffleArray(array) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -308,6 +313,18 @@ function shuffleArray(array) {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
+}
+
+
+// ===== ASSIGN QUESTION TYPES RANDOMLY =====
+// Each word gets "meaning" or "antonym" assigned randomly.
+// Only assigns "antonym" if the word actually has antonyms stored.
+function assignQuestionTypes(questions) {
+  return questions.map(q => {
+    const hasAntonyms = q.antonyms && q.antonyms.length > 0;
+    const type = hasAntonyms && Math.random() < 0.5 ? "antonym" : "meaning";
+    return Object.assign({}, q, { questionType: type });
+  });
 }
 
 
@@ -321,23 +338,18 @@ function startQuiz(totalQuestions, isExam) {
   getAllWords(function (words) {
 
     allWordsGlobal = words;
+
     // ===== BUILD MEANING MAP =====
-
-meaningToWordMap = {};
-
-words.forEach(word => {
-  word.meanings.forEach(meaning => {
-
-    const key = meaning.toLowerCase();
-
-    if (!meaningToWordMap[key]) {
-      meaningToWordMap[key] = [];
-    }
-
-    meaningToWordMap[key].push(word.word);
-
-  });
-});
+    meaningToWordMap = {};
+    words.forEach(word => {
+      word.meanings.forEach(meaning => {
+        const key = meaning.toLowerCase();
+        if (!meaningToWordMap[key]) {
+          meaningToWordMap[key] = [];
+        }
+        meaningToWordMap[key].push(word.word);
+      });
+    });
 
     if (words.length < 5) {
       alert("Not enough words in database.");
@@ -354,21 +366,15 @@ words.forEach(word => {
     const now = Date.now();
     const oneDay = 24 * 60 * 60 * 1000;
 
-    const freshWords = words.filter(w => {
-      return !w.lastAsked || (now - w.lastAsked) > oneDay;
-    });
-
     const nowTime = Date.now();
 
-const dueWords = words.filter(w =>
-  !w.nextReviewDate || w.nextReviewDate <= nowTime
-);
+    const dueWords = words.filter(w =>
+      !w.nextReviewDate || w.nextReviewDate <= nowTime
+    );
 
-const pool = dueWords.length >= totalQuestions ? dueWords : words;
-
+    const pool = dueWords.length >= totalQuestions ? dueWords : words;
 
     // ---- Adaptive Difficulty Engine ----
-
     const threeDays = 3 * 24 * 60 * 60 * 1000;
 
     let weak = [];
@@ -410,24 +416,24 @@ const pool = dueWords.length >= totalQuestions ? dueWords : words;
     ];
 
     if (selected.length < totalQuestions) {
-
       const remaining = shuffleArray(
         pool.filter(w => !selected.includes(w))
       );
-
       selected = [
         ...selected,
         ...remaining.slice(0, totalQuestions - selected.length)
       ];
     }
 
-    currentQuestions = shuffleArray(selected);
+    // ===== ASSIGN RANDOM QUESTION TYPES =====
+    currentQuestions = assignQuestionTypes(shuffleArray(selected));
 
     enterFocusMode();
-renderQuestion();
+    renderQuestion();
 
   });
 }
+
 function startWeakDrill(totalQuestions) {
 
   if (!db) {
@@ -439,7 +445,7 @@ function startWeakDrill(totalQuestions) {
 
     allWordsGlobal = words;
 
-    // ===== BUILD MEANING MAP (FIX 4) =====
+    // ===== BUILD MEANING MAP =====
     meaningToWordMap = {};
     words.forEach(word => {
       word.meanings.forEach(meaning => {
@@ -454,21 +460,22 @@ function startWeakDrill(totalQuestions) {
     examMode = false;
     score = 0;
     currentIndex = 0;
-    sessionResults = []; // FIX 4: initialize sessionResults
-    quizStartTime = Date.now(); // FIX 4: track start time
+    sessionResults = [];
+    quizStartTime = Date.now();
 
     // Sort by wrongCount descending
     const sortedByWeakness = [...words]
       .sort((a, b) => (b.wrongCount || 0) - (a.wrongCount || 0));
 
     const weakestPool = sortedByWeakness.slice(0, 30);
-
     const shuffled = shuffleArray(weakestPool);
+    const selected = shuffled.slice(0, totalQuestions);
 
-    currentQuestions = shuffled.slice(0, totalQuestions);
+    // ===== ASSIGN RANDOM QUESTION TYPES =====
+    currentQuestions = assignQuestionTypes(selected);
 
-enterFocusMode();
-renderQuestion();
+    enterFocusMode();
+    renderQuestion();
 
   });
 }
@@ -480,24 +487,24 @@ function renderQuestion() {
     return;
   }
 
-  // FIX 5: Clear timer BEFORE wiping container so ghost tick cannot fire on stale element
+  // Clear timer BEFORE wiping container so ghost tick cannot fire on stale element
   clearInterval(timerInterval);
   timerInterval = null;
 
   const container = document.getElementById("focusContent");
-
   container.innerHTML = "";
-// ===== EXIT BUTTON =====
-const exitBtn = document.createElement("button");
-exitBtn.innerText = "Exit";
-exitBtn.style.alignSelf = "flex-end";
-exitBtn.style.background = "#444";
-exitBtn.onclick = function () {
-  if (confirm("Are you sure you want to exit? Progress will be lost.")) {
-    exitFocusMode();
-  }
-};
-container.appendChild(exitBtn);
+
+  // ===== EXIT BUTTON =====
+  const exitBtn = document.createElement("button");
+  exitBtn.innerText = "Exit";
+  exitBtn.style.alignSelf = "flex-end";
+  exitBtn.style.background = "#444";
+  exitBtn.onclick = function () {
+    if (confirm("Are you sure you want to exit? Progress will be lost.")) {
+      exitFocusMode();
+    }
+  };
+  container.appendChild(exitBtn);
 
   const question = currentQuestions[currentIndex];
   updateLastAsked(question.id);
@@ -507,34 +514,54 @@ container.appendChild(exitBtn);
   infoBar.style.marginBottom = "10px";
   infoBar.style.fontWeight = "bold";
   if (examMode) {
-  infoBar.innerText =
-    `Question ${currentIndex + 1} / ${currentQuestions.length}`;
-} else {
-  infoBar.innerText =
-    `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
-}
-
+    infoBar.innerText = `Question ${currentIndex + 1} / ${currentQuestions.length}`;
+  } else {
+    infoBar.innerText = `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
+  }
   container.appendChild(infoBar);
 
-  // Question title
+  // ===== QUESTION TYPE LABEL =====
+  const questionTypeLabel = document.createElement("div");
+  questionTypeLabel.style.fontWeight = "bold";
+  questionTypeLabel.style.fontSize = "0.95em";
+  questionTypeLabel.style.marginBottom = "6px";
+  questionTypeLabel.style.padding = "4px 10px";
+  questionTypeLabel.style.borderRadius = "6px";
+  questionTypeLabel.style.display = "inline-block";
+
+  if (question.questionType === "antonym") {
+    questionTypeLabel.innerText = "🔄 Select the ANTONYM of:";
+    questionTypeLabel.style.backgroundColor = "rgba(255, 80, 80, 0.18)";
+    questionTypeLabel.style.color = "#ff6b6b";
+    questionTypeLabel.style.border = "1px solid #ff6b6b";
+  } else {
+    questionTypeLabel.innerText = "📖 Select the MEANING of:";
+    questionTypeLabel.style.backgroundColor = "rgba(79, 195, 247, 0.15)";
+    questionTypeLabel.style.color = "#4fc3f7";
+    questionTypeLabel.style.border = "1px solid #4fc3f7";
+  }
+
+  container.appendChild(questionTypeLabel);
+
+  // Question word title
   const title = document.createElement("h3");
-title.innerText = question.word;
+  title.innerText = question.word;
 
-if (examMode) {
-  title.classList.add("exam-word");
-} else {
-  title.classList.add("practice-word");
-}
+  if (examMode) {
+    title.classList.add("exam-word");
+  } else {
+    title.classList.add("practice-word");
+  }
 
-container.appendChild(title);
+  container.appendChild(title);
 
-// Phonetics badge (below the word)
-if (question.phonetics) {
-  const phonDiv = document.createElement("div");
-  phonDiv.className = "phonetics-badge";
-  phonDiv.innerText = question.phonetics;
-  container.appendChild(phonDiv);
-}
+  // Phonetics badge
+  if (question.phonetics) {
+    const phonDiv = document.createElement("div");
+    phonDiv.className = "phonetics-badge";
+    phonDiv.innerText = question.phonetics;
+    container.appendChild(phonDiv);
+  }
 
   // Timer (exam only)
   if (examMode) {
@@ -562,10 +589,10 @@ if (question.phonetics) {
   });
 
   const submitBtn = document.createElement("button");
-submitBtn.innerText = "Submit";
-submitBtn.className = "submit-btn";
-submitBtn.onclick = checkAnswer;
-container.appendChild(submitBtn);
+  submitBtn.innerText = "Submit";
+  submitBtn.className = "submit-btn";
+  submitBtn.onclick = checkAnswer;
+  container.appendChild(submitBtn);
 
 }
 
@@ -574,26 +601,87 @@ function generateOptions(question) {
 
   const maxCorrectAllowed = 3;
 
-  const shuffledCorrect = shuffleArray(question.meanings);
+  // ===== ANTONYM QUESTION =====
+  if (question.questionType === "antonym") {
 
+    const antonyms = question.antonyms || [];
+    const shuffledAntonyms = shuffleArray(antonyms);
+
+    const possibleMax = Math.min(maxCorrectAllowed, shuffledAntonyms.length);
+
+    // Dynamic difficulty
+    const accuracy = calculateAccuracy(question);
+    let numberOfCorrect;
+    const rand = Math.random();
+
+    if (accuracy < 50) {
+      numberOfCorrect = rand < 0.85 ? 1 : 2;
+    } else if (accuracy < 80) {
+      if (rand < 0.6) numberOfCorrect = 1;
+      else if (rand < 0.9) numberOfCorrect = 2;
+      else numberOfCorrect = 3;
+    } else {
+      if (rand < 0.3) numberOfCorrect = 1;
+      else if (rand < 0.7) numberOfCorrect = 2;
+      else numberOfCorrect = 3;
+    }
+
+    numberOfCorrect = Math.min(numberOfCorrect, possibleMax);
+    if (numberOfCorrect < 1) numberOfCorrect = 1;
+
+    const correctToUse = shuffledAntonyms.slice(0, numberOfCorrect);
+
+    // ===== DISTRACTOR POOL: other words' meanings + antonyms (BOTH used as traps) =====
+    const currentAntonymsLower = antonyms.map(a => a.toLowerCase());
+
+    let incorrectPool = [];
+
+    allWordsGlobal.forEach(w => {
+      if (w.word === question.word) return;
+
+      // Add meanings of other words as traps
+      w.meanings.forEach(m => {
+        if (!currentAntonymsLower.includes(m.toLowerCase())) {
+          incorrectPool.push(m);
+        }
+      });
+
+      // Add antonyms of other words as traps
+      (w.antonyms || []).forEach(a => {
+        if (!currentAntonymsLower.includes(a.toLowerCase())) {
+          incorrectPool.push(a);
+        }
+      });
+    });
+
+    incorrectPool = [...new Set(incorrectPool)];
+
+    const shuffledIncorrect = shuffleArray(incorrectPool);
+    const neededIncorrect = 5 - correctToUse.length;
+    const selectedIncorrect = shuffledIncorrect.slice(0, neededIncorrect);
+
+    const finalOptions = shuffleArray([...correctToUse, ...selectedIncorrect]);
+
+    question.currentCorrectAnswers = correctToUse;
+
+    return finalOptions;
+  }
+
+  // ===== MEANING QUESTION (original logic) =====
+  const shuffledCorrect = shuffleArray(question.meanings);
   const possibleMax = Math.min(maxCorrectAllowed, shuffledCorrect.length);
 
-  // Dynamic Difficulty Based on Performance
   const accuracy = calculateAccuracy(question);
-
   let numberOfCorrect;
   const rand = Math.random();
 
   if (accuracy < 50) {
-    if (rand < 0.85) numberOfCorrect = 1;
-    else numberOfCorrect = 2;
-  }
-  else if (accuracy < 80) {
+    numberOfCorrect = rand < 0.85 ? 1 : 2;
+  } else if (accuracy < 80) {
     if (rand < 0.6) numberOfCorrect = 1;
     else if (rand < 0.9) numberOfCorrect = 2;
     else numberOfCorrect = 3;
-  }
-  else {
+  } else {
     if (rand < 0.3) numberOfCorrect = 1;
     else if (rand < 0.7) numberOfCorrect = 2;
     else numberOfCorrect = 3;
@@ -603,18 +691,15 @@ function generateOptions(question) {
 
   const correctToUse = shuffledCorrect.slice(0, numberOfCorrect);
 
-  // ===== FIX 1: Build incorrect pool excluding ANY meaning of the current question =====
+  // Incorrect pool: meanings from other words only (exclude current word's meanings)
   const currentWordMeaningsLower = question.meanings.map(m => m.toLowerCase());
 
-  const otherWords = allWordsGlobal.filter(
-    w => w.word !== question.word
-  );
+  const otherWords = allWordsGlobal.filter(w => w.word !== question.word);
 
   let incorrectPool = [];
 
   otherWords.forEach(w => {
     w.meanings.forEach(m => {
-      // FIX 1: Skip if this meaning overlaps with any correct meaning of current word
       if (!currentWordMeaningsLower.includes(m.toLowerCase())) {
         incorrectPool.push(m);
       }
@@ -624,18 +709,11 @@ function generateOptions(question) {
   incorrectPool = [...new Set(incorrectPool)];
 
   const shuffledIncorrect = shuffleArray(incorrectPool);
-
-  const totalOptions = 5;
-  const neededIncorrect = totalOptions - correctToUse.length;
-
+  const neededIncorrect = 5 - correctToUse.length;
   const selectedIncorrect = shuffledIncorrect.slice(0, neededIncorrect);
 
-  const finalOptions = shuffleArray([
-    ...correctToUse,
-    ...selectedIncorrect
-  ]);
+  const finalOptions = shuffleArray([...correctToUse, ...selectedIncorrect]);
 
-  // Store correct answers temporarily
   question.currentCorrectAnswers = correctToUse;
 
   return finalOptions;
@@ -653,72 +731,56 @@ function checkAnswer() {
     if (cb.checked) selected.push(cb.value);
   });
 
-const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
+  const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
   const totalCorrect = correctAnswers.length;
   const currentWordId = currentQuestions[currentIndex].id;
+  const isAntonymQuestion = currentQuestions[currentIndex].questionType === "antonym";
 
   let correctSelected = 0;
   let wrongSelected = 0;
 
   selected.forEach(option => {
 
-  const optionLower = option.toLowerCase();
+    const optionLower = option.toLowerCase();
+    let isCorrect = false;
 
-  let isCorrect = false;
-
-  // 1️⃣ Direct match with correct meanings
-  if (correctAnswers.map(ans => ans.toLowerCase()).includes(optionLower)) {
-    isCorrect = true;
-  }
-
-  // 2️⃣ If option is a main word that shares a meaning
-  else {
-
-    const optionWordObj = allWordsGlobal.find(
-      w => w.word.toLowerCase() === optionLower
-    );
-
-    if (optionWordObj) {
-
-      const optionMeanings = optionWordObj.meanings.map(m => m.toLowerCase());
-
-      const correctLower = correctAnswers.map(ans => ans.toLowerCase());
-
-      const hasIntersection = optionMeanings.some(m =>
-        correctLower.includes(m)
-      );
-
-      if (hasIntersection) {
-        isCorrect = true;
-      }
-
+    // Direct match with correct answers
+    if (correctAnswers.map(ans => ans.toLowerCase()).includes(optionLower)) {
+      isCorrect = true;
     }
 
-  }
+    // For MEANING questions only: cross-check via shared meanings
+    else if (!isAntonymQuestion) {
+      const optionWordObj = allWordsGlobal.find(
+        w => w.word.toLowerCase() === optionLower
+      );
 
-  if (isCorrect) {
-    correctSelected++;
-  } else {
-    wrongSelected++;
-  }
+      if (optionWordObj) {
+        const optionMeanings = optionWordObj.meanings.map(m => m.toLowerCase());
+        const correctLower = correctAnswers.map(ans => ans.toLowerCase());
+        const hasIntersection = optionMeanings.some(m => correctLower.includes(m));
+        if (hasIntersection) {
+          isCorrect = true;
+        }
+      }
+    }
 
-});
+    if (isCorrect) {
+      correctSelected++;
+    } else {
+      wrongSelected++;
+    }
+
+  });
 
 
   let questionScore = 0;
 
-  // Nothing selected
   if (selected.length === 0) {
     questionScore = 0;
-  }
-
-  // Any wrong selected
-  else if (wrongSelected > 0) {
+  } else if (wrongSelected > 0) {
     questionScore = examMode ? -0.25 : 0;
-  }
-
-  // Only correct selected
-  else {
+  } else {
     questionScore = correctSelected / totalCorrect;
   }
 
@@ -726,11 +788,11 @@ const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
 
   updateWordStats(currentWordId, questionScore);
 
-  // FIX 3: isCorrect only true if ALL correct answers were selected and nothing wrong
   const fullyCorrect = (wrongSelected === 0 && correctSelected === totalCorrect);
 
   sessionResults.push({
     word: currentQuestions[currentIndex].word,
+    questionType: currentQuestions[currentIndex].questionType,
     correctAnswers: correctAnswers,
     selectedAnswers: selected,
     isCorrect: fullyCorrect,
@@ -743,23 +805,19 @@ const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
     checkboxes.forEach(cb => {
       const label = cb.parentElement;
 
-      // Correct answers → green
       if (correctAnswers.includes(cb.value)) {
         label.style.backgroundColor = "#c8e6c9";
       }
 
-      // Wrong selected → red
       if (cb.checked && !correctAnswers.includes(cb.value)) {
         label.style.backgroundColor = "#ffcdd2";
       }
     });
 
-    // Update score display
     const infoBar = container.firstChild;
     infoBar.innerText =
       `Question ${currentIndex + 1} / ${currentQuestions.length} | Score: ${score.toFixed(2)}`;
 
-    // Disable submit
     const submitBtn = container.querySelector(".submit-btn");
     if (submitBtn) submitBtn.disabled = true;
 
@@ -769,9 +827,8 @@ const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
     }, 1500);
 
   } else {
-    // EXAM MODE → No color feedback
     currentIndex++;
-    clearInterval(timerInterval); // FIX 5: clear timer on manual submit
+    clearInterval(timerInterval);
     timerInterval = null;
     renderQuestion();
   }
@@ -781,14 +838,11 @@ const correctAnswers = currentQuestions[currentIndex].currentCorrectAnswers;
 
 function startTimer(displayElement) {
 
-  // FIX 5: Stop any previous timer first
   clearInterval(timerInterval);
   timerInterval = null;
 
-  // Reset time for EACH question
   timeLeft = parseInt(document.getElementById("examTimerInput").value);
 
-  // Safety check
   if (isNaN(timeLeft) || timeLeft <= 0) {
     timeLeft = 10;
   }
@@ -799,7 +853,6 @@ function startTimer(displayElement) {
 
     timeLeft--;
 
-    // FIX 5: Guard — if element no longer in DOM, kill timer immediately
     if (!document.body.contains(displayElement)) {
       clearInterval(timerInterval);
       timerInterval = null;
@@ -837,12 +890,10 @@ function showAnalytics(container) {
       ? ((totalCorrect / totalAttempts) * 100).toFixed(2)
       : 0;
 
-    // Sort weakest words
     const weakest = [...words]
       .sort((a, b) => (b.wrongCount || 0) - (a.wrongCount || 0))
       .slice(0, 10);
 
-    // Sort strongest words
     const strongest = [...words]
       .sort((a, b) => (b.correctCount || 0) - (a.correctCount || 0))
       .slice(0, 5);
@@ -990,7 +1041,6 @@ function loadSessionAnalytics() {
       const words = wordReq.result;
       const today = new Date();
 
-      // Prepare last 7 days map
       const last7Days = [];
 
       for (let i = 6; i >= 0; i--) {
@@ -999,39 +1049,22 @@ function loadSessionAnalytics() {
 
         const key = date.toISOString().split("T")[0];
 
-        const weekday = date.toLocaleDateString(undefined, {
-          weekday: "short"
-        });
+        const weekday = date.toLocaleDateString(undefined, { weekday: "short" });
+        const dayMonth = date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
-        const dayMonth = date.toLocaleDateString(undefined, {
-          day: "numeric",
-          month: "short"
-        });
-
-        last7Days.push({
-          date: key,
-          label: `${weekday}<br>${dayMonth}`,
-          count: 0
-        });
+        last7Days.push({ date: key, label: `${weekday}<br>${dayMonth}`, count: 0 });
       }
 
-      // Count words per day
       words.forEach(word => {
         const created = new Date(word.createdAt).toISOString().split("T")[0];
-
         const dayObj = last7Days.find(d => d.date === created);
-        if (dayObj) {
-          dayObj.count++;
-        }
+        if (dayObj) dayObj.count++;
       });
 
-      // Find max count for scaling
       const maxCount = Math.max(...last7Days.map(d => d.count), 1);
 
       const chartHTML = last7Days.map(day => {
-
         const heightPercent = (day.count / maxCount) * 100;
-
         return `
           <div class="upload-bar-wrapper">
             <div class="upload-bar" style="height:${heightPercent}%"></div>
@@ -1050,6 +1083,7 @@ function loadSessionAnalytics() {
 
   };
 }
+
 function loadBookMode() {
 
   const container = document.getElementById("bookContainer");
@@ -1072,15 +1106,12 @@ function loadBookMode() {
       const wordCard = document.createElement("div");
       wordCard.className = "word-card";
       wordCard.style.position = "relative";
+
       // ✏️ NOTE BUTTON
       const noteBtn = document.createElement("button");
       noteBtn.innerText = "✏️";
       noteBtn.className = "note-btn";
-
-      noteBtn.onclick = function () {
-        editNote(word.id);
-      };
-
+      noteBtn.onclick = function () { editNote(word.id); };
       wordCard.appendChild(noteBtn);
 
       // WORD TITLE
@@ -1127,7 +1158,6 @@ function updateLastAsked(wordId) {
   request.onsuccess = function () {
     const word = request.result;
     if (!word) return;
-
     word.lastAsked = Date.now();
     store.put(word);
   };
@@ -1156,7 +1186,6 @@ fileInput.addEventListener("change", () => {
 
 function enterFocusMode() {
   const focus = document.getElementById("focusMode");
-
   focus.classList.add("active");
   document.body.classList.add("locked");
 }
@@ -1192,9 +1221,7 @@ function endQuiz() {
   summary.className = "exam-summary";
 
   summary.innerHTML = `
-
     <div class="result-card">
-
       <h2>${examMode ? "Exam Result" : "Practice Summary"}</h2>
 
       ${examMode ? `
@@ -1204,39 +1231,13 @@ function endQuiz() {
       ` : ""}
 
       <div class="result-grid">
-
-        <div>
-          <span>Total Questions</span>
-          <strong>${totalQuestions}</strong>
-        </div>
-
-        <div>
-          <span>Correct</span>
-          <strong>${correctCount}</strong>
-        </div>
-
-        <div>
-          <span>Wrong</span>
-          <strong>${wrongCount}</strong>
-        </div>
-
-        <div>
-          <span>Accuracy</span>
-          <strong>${accuracy}%</strong>
-        </div>
-
-        <div>
-          <span>Total Time</span>
-          <strong>${totalTimeSec} sec</strong>
-        </div>
-
-        <div>
-          <span>Avg Time / Question</span>
-          <strong>${avgTimePerQuestion} sec</strong>
-        </div>
-
+        <div><span>Total Questions</span><strong>${totalQuestions}</strong></div>
+        <div><span>Correct</span><strong>${correctCount}</strong></div>
+        <div><span>Wrong</span><strong>${wrongCount}</strong></div>
+        <div><span>Accuracy</span><strong>${accuracy}%</strong></div>
+        <div><span>Total Time</span><strong>${totalTimeSec} sec</strong></div>
+        <div><span>Avg Time / Question</span><strong>${avgTimePerQuestion} sec</strong></div>
       </div>
-
     </div>
 
     <hr style="margin:30px 0;">
@@ -1248,7 +1249,6 @@ function endQuiz() {
   const wrongWords = sessionResults.filter(r => !r.isCorrect);
 
   if (wrongWords.length === 0) {
-
     const perfect = document.createElement("p");
     perfect.innerHTML = "🔥 <strong>Perfect Session!</strong> No wrong answers.";
     container.appendChild(perfect);
@@ -1256,15 +1256,19 @@ function endQuiz() {
   } else {
 
     wrongWords.forEach(item => {
-
       const div = document.createElement("div");
       div.className = "wrong-word-card";
 
+      // Show question type in the review card too
+      const typeTag = item.questionType === "antonym"
+        ? `<span style="color:#ff6b6b;font-size:0.85em;">🔄 Antonym Q</span>`
+        : `<span style="color:#4fc3f7;font-size:0.85em;">📖 Meaning Q</span>`;
+
       div.innerHTML = `
-        <strong class="wrong-word-title">${item.word}</strong><br>
-        <span class="wrong-label">Your Answer:</span> 
+        <strong class="wrong-word-title">${item.word}</strong> ${typeTag}<br>
+        <span class="wrong-label">Your Answer:</span>
           ${item.selectedAnswers.length > 0 ? item.selectedAnswers.join(", ") : "None"}<br>
-        <span class="correct-label">Correct Answer:</span> 
+        <span class="correct-label">Correct Answer:</span>
           ${item.correctAnswers.join(", ")}
       `;
 
@@ -1296,11 +1300,10 @@ function endQuiz() {
 }
 
 function exitFocusMode() {
-  clearInterval(timerInterval); // FIX 5: kill timer on manual exit too
+  clearInterval(timerInterval);
   timerInterval = null;
 
   const focus = document.getElementById("focusMode");
-
   focus.classList.remove("active");
   document.body.classList.remove("locked");
 
@@ -1335,8 +1338,6 @@ function masterDeleteAllData() {
 
   transaction.oncomplete = function () {
     alert("All data deleted successfully.");
-
-    // Refresh analytics after deletion
     loadSessionAnalytics();
   };
 
@@ -1359,8 +1360,9 @@ function exportAllData() {
     const rows = words.map(w => ({
       Word: w.word,
       Meaning: (w.meanings || []).join(", "),
+      Antonyms: (w.antonyms || []).join(", "),   // ===== ANTONYMS EXPORTED =====
       Phonetics: w.phonetics || "",
-      Note: w.note || ""   // ✅ NEW COLUMN
+      Note: w.note || ""
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -1379,7 +1381,6 @@ document.getElementById("exportBtn")
 
 const themeBtn = document.getElementById("themeToggleBtn");
 
-// Load saved theme
 const savedTheme = localStorage.getItem("theme");
 
 if (savedTheme === "light") {
@@ -1421,14 +1422,10 @@ function updateWordStats(wordId, performanceScore) {
     if (performanceScore <= 0) {
       word.wrongCount = (word.wrongCount || 0) + 1;
       word.reviewInterval = 1;
-    }
-
-    else if (performanceScore < 1) {
+    } else if (performanceScore < 1) {
       word.correctCount = (word.correctCount || 0) + 1;
       word.reviewInterval = 2;
-    }
-
-    else {
+    } else {
       word.correctCount = (word.correctCount || 0) + 1;
       word.reviewInterval = Math.min((word.reviewInterval || 1) * 2, 14);
     }
@@ -1438,6 +1435,7 @@ function updateWordStats(wordId, performanceScore) {
     store.put(word);
   };
 }
+
 function editNote(wordId) {
 
   const transaction = db.transaction("words", "readwrite");
@@ -1450,19 +1448,16 @@ function editNote(wordId) {
     const word = request.result;
     if (!word) return;
 
-    const newNote = prompt(
-      "✏️ Add / Edit Note:",
-      word.note || ""
-    );
+    const newNote = prompt("✏️ Add / Edit Note:", word.note || "");
 
     if (newNote !== null) {
       word.note = newNote.trim();
       store.put(word);
-
       alert("Note saved!");
-      loadBookMode(); // refresh UI
+      loadBookMode();
     }
 
   };
 }
+
 });
