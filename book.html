@@ -5,9 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vocabulary Book</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* ===== ANTONYM DISPLAY ===== */
+    .antonym-display {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.82em;
+      font-weight: 600;
+      background-color: rgba(255, 107, 107, 0.12);
+      color: #ff6b6b;
+      border: 1px solid rgba(255, 107, 107, 0.4);
+      letter-spacing: 0.2px;
+    }
+
+    .antonym-label {
+      font-size: 0.75em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #ff6b6b;
+      margin-top: 8px;
+      margin-bottom: 2px;
+      opacity: 0.85;
+    }
+
+    /* Light mode override */
+    body.light-mode .antonym-display {
+      background-color: rgba(220, 50, 50, 0.08);
+      color: #c0392b;
+      border-color: rgba(220, 50, 50, 0.35);
+    }
+
+    body.light-mode .antonym-label {
+      color: #c0392b;
+    }
+  </style>
 </head>
 <body class="book-page">
- 
+
 <header class="book-header">
 
   <div class="header-left">
@@ -85,11 +122,13 @@ document.getElementById("searchInput").addEventListener("input", function () {
 });
 
 // ===== BUILD SEARCH INDEX =====
+// Now also searches antonyms
 function buildSearchIndex(words) {
   return words.map(word => {
     const combinedText = (
       word.word + " " +
       word.meanings.join(" ") + " " +
+      (word.antonyms || []).join(" ") + " " +
       (word.note || "")
     ).toLowerCase();
 
@@ -172,12 +211,17 @@ function loadBook(filterDays) {
 
       const card = document.createElement("div");
       card.className = "book-word";
+      card.style.position = "relative";
 
       const meanings = wordObj.meanings
         .map(m => `<li>${m}</li>`)
         .join("");
 
-      card.style.position = "relative";
+      // ===== ANTONYMS BLOCK =====
+      const antonymHTML = (wordObj.antonyms && wordObj.antonyms.length > 0)
+        ? `<div class="antonym-label">🔄 Antonyms</div>
+           <div class="antonym-display">${wordObj.antonyms.join(" &nbsp;·&nbsp; ")}</div>`
+        : "";
 
       card.innerHTML = `
         <button class="note-btn" onclick="editNote(${wordObj.id})">✏️</button>
@@ -188,8 +232,10 @@ function loadBook(filterDays) {
 
         <ul>${meanings}</ul>
 
+        ${antonymHTML}
+
         ${wordObj.note ? `<div class="note-display">📝 ${wordObj.note}</div>` : ""}
-        `;
+      `;
 
       container.appendChild(card);
     });
@@ -246,6 +292,7 @@ function loadBook(filterDays) {
     }
   };
 }
+
 function editNote(wordId) {
 
   const transaction = db.transaction("words", "readwrite");
