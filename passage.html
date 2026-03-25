@@ -9,10 +9,10 @@
 
     /* ===== ROOT ===== */
     html, body {
-      height: 100%;
-      margin: 0;
-      overflow: hidden;
-    }
+  height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+}
 
     .passage-page {
       height: 100vh;
@@ -151,13 +151,11 @@
 
     /* ===== PASSAGE PANEL ===== */
     .passage-panel {
-      flex: 0 0 42%;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      background: #0c0c20;
-      border-bottom: 2px solid rgba(255,26,26,0.5);
-    }
+  height: 50%;
+  overflow: hidden;
+display: flex;
+flex-direction: column;
+}
 
     .passage-panel-header {
       display: flex;
@@ -185,13 +183,15 @@
     }
 
     .passage-body {
-      padding: 16px 18px 20px;
-      font-size: 0.85rem;
-      line-height: 1.85;
-      color: #b8b8d0;
-      overflow-y: auto;
-      flex: 1;
-    }
+  padding: 18px 18px 24px;
+  font-size: 0.95rem;
+  line-height: 2.1;   /* 🔥 increased spacing */
+  letter-spacing: 0.3px;  /* smoother reading */
+  word-spacing: 1px;      /* slight breathing */
+  color: #d0d0e8;
+  overflow-y: auto;
+  flex: 1;
+}
 
     /* ===== QUESTION PANEL ===== */
     .question-panel {
@@ -202,6 +202,7 @@
       flex-direction: column;
       min-height: 0;
       background: #0a0a18;
+      padding-bottom: 80px;
     }
 
     /* ===== DESKTOP: Side-by-side ===== */
@@ -343,21 +344,21 @@
 
     /* ===== NEXT BUTTON ===== */
     .next-btn {
-      margin-top: 16px;
-      padding: 12px 28px;
-      background: linear-gradient(135deg, #ff1a1a, #cc0000);
-      color: white;
-      border: none;
-      border-radius: 9px;
-      font-size: 0.88rem;
-      font-weight: 700;
-      cursor: pointer;
-      align-self: flex-end;
-      display: none;
-      transition: opacity 0.2s, transform 0.1s;
-      flex-shrink: 0;
-      letter-spacing: 0.3px;
-    }
+  position: sticky;
+  bottom: 10px;
+  margin-top: 16px;
+  padding: 12px 28px;
+  background: linear-gradient(135deg, #ff1a1a, #cc0000);
+  color: white;
+  border: none;
+  border-radius: 9px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: stretch;
+  display: none;
+  z-index: 10;
+}
 
     .next-btn:hover { opacity: 0.88; }
     .next-btn:active { transform: scale(0.97); }
@@ -600,7 +601,13 @@
 
     /* ===== UTILITY ===== */
     .hidden { display: none !important; }
-
+#divider {
+  height: 8px;
+  background: linear-gradient(to right, #ff1a1a, #ff6b6b);
+  cursor: row-resize;
+  flex-shrink: 0;
+  border-radius: 10px;
+}
   </style>
 </head>
 <body class="passage-page">
@@ -621,14 +628,14 @@
 <div id="testScreen" class="hidden">
 
   <!-- LEFT / TOP: Passage -->
-  <div class="passage-panel">
+  <div class="passage-panel" id="passagePanel">
     <div class="passage-panel-header">
       <h2 id="passagePanelTitle">📰 Passage</h2>
       <span class="scroll-hint">↕ scroll</span>
     </div>
     <div class="passage-body" id="passageBody"></div>
   </div>
-
+  <div id="divider"></div>
   <!-- RIGHT / BOTTOM: Questions -->
   <div class="question-panel">
     <div class="q-progress-wrap">
@@ -959,7 +966,42 @@ function backToSelect() {
   document.getElementById("selectScreen").classList.remove("hidden");
   loadPassageList();
 }
+// ===== DRAG RESIZE =====
+const divider = document.getElementById("divider");
+const passagePanel = document.getElementById("passagePanel");
+const testScreen = document.getElementById("testScreen");
 
+let isDragging = false;
+
+divider.addEventListener("mousedown", () => isDragging = true);
+divider.addEventListener("touchstart", () => isDragging = true);
+
+document.addEventListener("mousemove", (e) => {
+  if (!isDragging) return;
+
+  const rect = testScreen.getBoundingClientRect();
+  const offsetY = e.clientY - rect.top;
+  const percentage = (offsetY / rect.height) * 100;
+
+  if (percentage < 20 || percentage > 80) return;
+
+  passagePanel.style.height = percentage + "%";
+});
+
+document.addEventListener("touchmove", (e) => {
+  if (!isDragging) return;
+
+  const rect = testScreen.getBoundingClientRect();
+  const offsetY = e.touches[0].clientY - rect.top;
+  const percentage = (offsetY / rect.height) * 100;
+
+  if (percentage < 20 || percentage > 80) return;
+
+  passagePanel.style.height = percentage + "%";
+});
+
+document.addEventListener("mouseup", () => isDragging = false);
+document.addEventListener("touchend", () => isDragging = false);
 </script>
 </body>
 </html>
