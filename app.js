@@ -1213,7 +1213,7 @@ function loadBookMode() {
 
       // WORD TITLE
       const title = document.createElement("h3");
-      title.innerText = word.word;
+      title.innerText = word.word.charAt(0).toUpperCase() + word.word.slice(1);
       wordCard.appendChild(title);
 
       // PHONETICS
