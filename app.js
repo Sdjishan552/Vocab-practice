@@ -57,7 +57,7 @@ const request = indexedDB.open("VocabDB", 4);
         autoIncrement: true
       });
 
-      wordsStore.createIndex("word", "word", { unique: false });
+      wordsStore.createIndex("word", "word", { unique: true });
       wordsStore.createIndex("batchId", "batchId", { unique: false });
     }
 
@@ -259,22 +259,29 @@ if (firstRow.Word && firstRow.Meaning) {
 
   const batchId = new Date().toISOString();
   let addedCount = 0;
-
+  let pending = jsonData.length;
   const transaction = db.transaction("words", "readwrite");
   const store = transaction.objectStore("words");
 
   jsonData.forEach(row => {
 
-    const mainWord = row.Word ? row.Word.trim() : "";
-    if (!mainWord) return;
+    const mainWord = row.Word ? row.Word.trim().toLowerCase() : "";
+    if (!mainWord) {
+      pending--;
+      return;
+    }
 
     const meanings = row.Meaning
-      ? row.Meaning.split(",").map(m => m.trim()).filter(Boolean)
-      : [];
+  ? row.Meaning.split(",")
+      .map(m => m.trim().toLowerCase())
+      .filter(Boolean)
+  : [];
 
-    const antonyms = row.Antonyms
-      ? row.Antonyms.split(",").map(a => a.trim()).filter(Boolean)
-      : [];
+const antonyms = row.Antonyms
+  ? row.Antonyms.split(",")
+      .map(a => a.trim().toLowerCase())
+      .filter(Boolean)
+  : [];
 
     const wordObject = {
       word: mainWord,
@@ -292,17 +299,59 @@ if (firstRow.Word && firstRow.Meaning) {
       createdAt: new Date()
     };
 
+    const index = store.index("word");
+const request = index.get(mainWord);
+
+request.onsuccess = function () {
+
+  const existing = request.result;
+
+  if (existing) {
+
+    const newMeanings = [...new Set([
+      ...(existing.meanings || []),
+      ...meanings
+    ])];
+
+    const newAntonyms = [...new Set([
+      ...(existing.antonyms || []),
+      ...antonyms
+    ])];
+
+    existing.meanings = newMeanings;
+    existing.antonyms = newAntonyms;
+
+    if (!existing.phonetics && row.Phonetics) {
+      existing.phonetics = row.Phonetics;
+    }
+
+    if (!existing.note && row.Note) {
+      existing.note = row.Note;
+    }
+
+    store.put(existing);
+
+  } else {
+
     store.add(wordObject);
     addedCount++;
+  }
 
-  });
+  // ✅ ADD THIS PART (IMPORTANT)
+  pending--;
 
-  transaction.oncomplete = function () {
+  if (pending === 0) {
     document.getElementById("uploadStatus").innerText =
       "✅ Vocab uploaded successfully! Words added: " + addedCount;
 
     loadSessionAnalytics();
-  };
+  }
+
+};
+
+  });
+
+   
 
   return;
 }
@@ -1385,7 +1434,7 @@ function masterDeleteAllData() {
   wordsStore.clear();
   sessionsStore.clear();
   passagesStore.clear();
-  
+
   transaction.oncomplete = function () {
     alert("All data deleted successfully.");
     loadSessionAnalytics();
