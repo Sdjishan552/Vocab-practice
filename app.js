@@ -146,8 +146,7 @@ initDB();
 }
 
 // ===== PROCESS PASSAGES FROM SHEET 2 =====
-function processPassages(rows) {
-
+function processPassages(rows, selectedDate) {
   const passageMap = {};
 
   rows.forEach(row => {
@@ -158,7 +157,7 @@ function processPassages(rows) {
         title: title,
         text: row.PassageText ? row.PassageText.trim() : "",
         questions: [],
-        createdAt: new Date()
+        createdAt: selectedDate
       };
     }
 
@@ -220,12 +219,20 @@ function processPassages(rows) {
     }
 
     if (!db) {
-      alert("Database not ready yet. Please refresh.");
-      return;
-    }
+  alert("Database not ready yet. Please refresh.");
+  return;
+}
 
-    const reader = new FileReader();
+    const selectedDateInput = document.getElementById("uploadDateInput").value;
 
+if (!selectedDateInput) {
+  alert("⚠️ Please select a date before uploading.");
+  return;
+}
+
+const [year, month, day] = selectedDateInput.split("-").map(Number);
+const selectedDate = new Date(year, month - 1, day);
+const reader = new FileReader();
     reader.onload = function (e) {
       try {
         const data = new Uint8Array(e.target.result);
@@ -246,11 +253,13 @@ const firstRow = jsonData[0];
 
 // ===== PASSAGE FILE =====
 if (firstRow.PassageTitle && firstRow.Question) {
-  processPassages(jsonData);
+  processPassages(jsonData, selectedDate);
 
   document.getElementById("uploadStatus").innerText =
-    "✅ Passage file uploaded successfully!";
+  "✅ Passage file uploaded successfully!";
 
+loadSessionAnalytics(); // ✅ ADD THIS
+document.getElementById("uploadDateInput").value = "";
   return;
 }
 
@@ -294,9 +303,9 @@ const antonyms = row.Antonyms
       totalAttempts: 0,
       lastAsked: null,
       reviewInterval: 1,
-      nextReviewDate: Date.now(),
+      nextReviewDate: selectedDate.getTime(),
       batchId: batchId,
-      createdAt: new Date()
+      createdAt: selectedDate
     };
 
     const index = store.index("word");
@@ -345,7 +354,7 @@ request.onsuccess = function () {
       "✅ Vocab uploaded successfully! Words added: " + addedCount;
 
     loadSessionAnalytics();
-    loadBookMode();
+    document.getElementById("uploadDateInput").value = "";
   }
 
 };
@@ -1068,7 +1077,7 @@ function loadSessionAnalytics() {
   request.onsuccess = function () {
 
     const sessions = request.result;
-
+    const passageSessions = sessions.filter(s => s.type === "passage");
     if (!sessions || sessions.length === 0) {
       const noSession = document.createElement("p");
       noSession.innerText = "No sessions yet.";
@@ -1124,7 +1133,31 @@ function loadSessionAnalytics() {
     `;
 
     container.appendChild(analyticsGrid);
+    // ===== PASSAGE ANALYTICS =====
+const passageAccuracy =
+  passageSessions.length > 0
+    ? (passageSessions.reduce((sum, s) => sum + s.accuracy, 0) / passageSessions.length).toFixed(1)
+    : 0;
 
+const passageCard = document.createElement("div");
+passageCard.className = "analytics-card";
+passageCard.style.borderTop = "4px solid #ff9800";
+
+passageCard.innerHTML = passageSessions.length === 0
+  ? `<h3>📄 Passage Performance</h3><p>No attempts yet.</p>`
+  : `
+    <h3>📄 Passage Performance</h3>
+    <div class="analytics-row">
+      <span>Total Attempts</span>
+      <span>${passageSessions.length}</span>
+    </div>
+    <div class="analytics-row">
+      <span>Average Accuracy</span>
+      <span>${passageAccuracy}%</span>
+    </div>
+  `;
+
+container.appendChild(passageCard);
     // ===== LAST 7 DAYS UPLOAD CHART =====
 
     const chartContainer = document.getElementById("uploadChartContainer");
@@ -1154,7 +1187,12 @@ function loadSessionAnalytics() {
       }
 
       words.forEach(word => {
-        const created = new Date(word.createdAt).toISOString().split("T")[0];
+        const d = new Date(word.createdAt);
+
+const created =
+  d.getFullYear() + "-" +
+  String(d.getMonth() + 1).padStart(2, "0") + "-" +
+  String(d.getDate()).padStart(2, "0");
         const dayObj = last7Days.find(d => d.date === created);
         if (dayObj) dayObj.count++;
       });
@@ -1214,7 +1252,7 @@ function loadBookMode() {
 
       // WORD TITLE
       const title = document.createElement("h3");
-      title.innerText = word.word.charAt(0).toUpperCase() + word.word.slice(1);
+      title.innerText = word.word;
       wordCard.appendChild(title);
 
       // PHONETICS
