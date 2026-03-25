@@ -69,8 +69,7 @@
 <div class="book-filter">
   <select id="dateFilter">
     <option value="all">All Words</option>
-    <option value="1">Todays</option>
-    <option value="3">Last 3 Days</option>
+<option value="1">Today</option>    <option value="3">Last 3 Days</option>
     <option value="7">Last 7 Days</option>
     <option value="10">Last 10 Days</option>
     <option value="30">Last 30 Days</option>
@@ -156,25 +155,7 @@ function loadBook(filterDays) {
     let words = req.result;
     const searchText = document.getElementById("searchInput").value.toLowerCase().trim();
 
-    // ===== SEARCH FILTER =====
-    if (searchText !== "") {
-
-      const indexedWords = buildSearchIndex(words);
-
-      const matches = indexedWords.filter(entry =>
-        entry.searchableText.includes(searchText)
-      );
-
-      words = matches.map(entry =>
-        words.find(w => w.word === entry.mainWord)
-      );
-    }
-
-    if (!words || words.length === 0) {
-      container.innerHTML = "<p>No words found.</p>";
-      return;
-    }
-
+    
     // ===== DATE FILTER =====
     if (filterDays !== "all") {
       const days = parseInt(filterDays);
@@ -199,6 +180,28 @@ function loadBook(filterDays) {
       container.innerHTML = "<p>No words found for selected filter.</p>";
       return;
     }
+// ===== SEARCH FILTER =====
+    if (searchText !== "") {
+
+      const indexedWords = buildSearchIndex(words);
+
+      const matches = indexedWords.filter(entry =>
+        entry.searchableText.includes(searchText)
+      );
+
+      words = matches
+  .map(entry => words.find(w => w.word === entry.mainWord))
+  .filter(Boolean);
+    }
+
+    if (!words || words.length === 0) {
+  container.innerHTML = `
+    <div style="text-align:center; padding:30px; color:var(--text-muted);">
+      📭 No words found for this date range
+    </div>
+  `;
+  return;
+}
 
     // ===== SORT ALPHABETICALLY =====
     words.sort((a, b) => a.word.localeCompare(b.word));
@@ -235,7 +238,16 @@ function loadBook(filterDays) {
       card.innerHTML = `
         <button class="note-btn" onclick="editNote(${wordObj.id})">✏️</button>
 
-        <h3>${wordObj.word}</h3>
+        <h3>${wordObj.word.charAt(0).toUpperCase() + wordObj.word.slice(1)}</h3>
+<div style="font-size:0.75em; color:var(--text-muted); margin-bottom:4px;">
+  ${(() => {
+  const d = new Date(wordObj.createdAt);
+  return "📅 " +
+    String(d.getDate()).padStart(2, "0") + "/" +
+    String(d.getMonth() + 1).padStart(2, "0") + "/" +
+    d.getFullYear();
+})()}
+</div>
 
         ${wordObj.phonetics ? `<div class="phonetics-badge">${wordObj.phonetics}</div>` : ""}
 
