@@ -27,21 +27,30 @@
     🌙 Dark Mode
   </button>
 </header>
-<div id="quickStats"></div>
+
+<div id="quickStats" class="quick-stats-card"></div>
+
 <!-- ================= NAVIGATION ================= -->
 <nav>
   <button type="button" onclick="showSection('upload')">Upload</button>
   <button type="button" onclick="showSection('practice')">Practice</button>
-<button type="button" onclick="showSection('exam')">Exam</button>
-<button type="button" onclick="showSection('analytics')">Analytics</button>
-<button type="button" onclick="window.location.href='passage.html'">📄 Passage</button>
+  <button type="button" onclick="showSection('exam')">Exam</button>
+  <button type="button" onclick="showSection('analytics')">Analytics</button>
+  <button type="button" onclick="window.location.href='passage.html'">📄 Passage</button>
 </nav>
 
 <!-- ================= UPLOAD ================= -->
 <section id="upload" class="section active">
   <h2>Upload Excel</h2>
-
   <div class="file-upload-wrapper">
+
+  <div class="upload-date-row">
+  <label>Select Date</label>
+
+  <div class="date-input-box">
+    <input type="date" id="uploadDateInput" required />
+  </div>
+</div>
     <input type="file" id="excelFile" accept=".xlsx,.xls" hidden />
 
     <button type="button" id="customFileBtn">
@@ -50,9 +59,7 @@
 
     <span id="fileName">No file selected</span>
 
-    <button id="uploadBtn">
-      🚀 Upload & Save
-    </button>
+<button type="button" id="uploadBtn">🚀 Upload & Save</button>
   </div>
 
   <div id="uploadStatus"></div>
