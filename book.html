@@ -91,7 +91,7 @@ if (savedTheme === "light") {
 
 let db;
 
-const request = indexedDB.open("VocabDB", 3);
+const request = indexedDB.open("VocabDB", 4);
 
 request.onupgradeneeded = function (event) {
   const d = event.target.result;
