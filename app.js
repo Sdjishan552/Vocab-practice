@@ -40,10 +40,9 @@ function initDB() {
   document.getElementById("startPractice").disabled = true;
   document.getElementById("startExam").disabled = true;
   document.getElementById("startWeakMode").disabled = true;
-  document.getElementById("startTodayPractice").disabled = true;
   document.getElementById("uploadBtn").disabled = true;
 
-const request = indexedDB.open("VocabDB", 3);
+const request = indexedDB.open("VocabDB", 4);
   request.onerror = function () {
     logDebug("Database failed to open");
   };
@@ -65,6 +64,14 @@ const request = indexedDB.open("VocabDB", 3);
     // SESSIONS STORE
     if (!db.objectStoreNames.contains("sessions")) {
       db.createObjectStore("sessions", {
+        keyPath: "id",
+        autoIncrement: true
+      });
+    }
+
+    // PASSAGES STORE
+    if (!db.objectStoreNames.contains("passages")) {
+      db.createObjectStore("passages", {
         keyPath: "id",
         autoIncrement: true
       });
@@ -97,7 +104,6 @@ request.onsuccess = function () {
     document.getElementById("startPractice").disabled = false;
     document.getElementById("startExam").disabled = false;
     document.getElementById("startWeakMode").disabled = false;
-    document.getElementById("startTodayPractice").disabled = false;
     document.getElementById("uploadBtn").disabled = false;
 
     // Always refresh analytics once DB is ready
@@ -139,6 +145,64 @@ initDB();
   };
 }
 
+// ===== PROCESS PASSAGES FROM SHEET 2 =====
+function processPassages(rows) {
+
+  const passageMap = {};
+
+  rows.forEach(row => {
+    const title = row.PassageTitle ? row.PassageTitle.trim() : "Untitled Passage";
+
+    if (!passageMap[title]) {
+      passageMap[title] = {
+        title: title,
+        text: row.PassageText ? row.PassageText.trim() : "",
+        questions: [],
+        createdAt: new Date()
+      };
+    }
+
+    // If PassageText only appears in first row, keep it; skip blank overrides
+    if (row.PassageText && row.PassageText.trim() && !passageMap[title].text) {
+      passageMap[title].text = row.PassageText.trim();
+    }
+
+    if (row.Question && row.Question.trim() !== "") {
+      passageMap[title].questions.push({
+        question: row.Question.trim(),
+        optionA: row.OptionA ? String(row.OptionA).trim() : "",
+        optionB: row.OptionB ? String(row.OptionB).trim() : "",
+        optionC: row.OptionC ? String(row.OptionC).trim() : "",
+        optionD: row.OptionD ? String(row.OptionD).trim() : "",
+        optionE: row.OptionE ? String(row.OptionE).trim() : "",
+        correctAnswer: row.CorrectAnswer
+          ? String(row.CorrectAnswer).trim().toUpperCase()
+          : "A"
+      });
+    }
+  });
+
+  const tx = db.transaction("passages", "readwrite");
+  const store = tx.objectStore("passages");
+
+  Object.values(passageMap).forEach(passage => {
+    if (passage.questions.length > 0) {
+      store.add(passage);
+    }
+  });
+
+  tx.oncomplete = function () {
+    logDebug("Passages stored: " + Object.keys(passageMap).length);
+    const count = Object.keys(passageMap).length;
+    document.getElementById("uploadStatus").innerText =
+      "Upload successful! Words + " + count + " passage(s) saved.";
+  };
+
+  tx.onerror = function () {
+    logDebug("Passage storage error");
+  };
+}
+
 
 
 
@@ -177,92 +241,74 @@ initDB();
           return;
         }
 
-        const batchId = new Date().toISOString();
+// 🔍 DETECT FILE TYPE
+const firstRow = jsonData[0];
 
-        let addedCount = 0;
-
-const transaction = db.transaction("words", "readwrite");
-const store = transaction.objectStore("words");
-
-jsonData.forEach(row => {
-
-  const mainWord = row.Word ? row.Word.trim() : "";
-  const newMeanings = row.Meaning
-    ? row.Meaning.split(",").map(m => m.trim()).filter(m => m !== "")
-    : [];
-  const newPhonetics = row.Phonetics ? row.Phonetics.trim() : "";
-
-  // ===== ANTONYMS PARSING =====
-  const newAntonyms = row.Antonyms
-    ? row.Antonyms.split(",").map(a => a.trim()).filter(a => a !== "")
-    : [];
-
-  if (mainWord === "") return;
-
-  const getRequest = store.index("word").getAll(mainWord);
-
-  getRequest.onsuccess = function () {
-
-    const existingWords = getRequest.result;
-
-    if (existingWords.length > 0) {
-
-      // Merge with first match
-      const existingWord = existingWords[0];
-
-      const existingMeanings = existingWord.meanings || [];
-      const mergedMeanings = [...new Set([...existingMeanings, ...newMeanings])];
-      existingWord.meanings = mergedMeanings;
-
-      // ===== MERGE ANTONYMS =====
-      const existingAntonyms = existingWord.antonyms || [];
-      const mergedAntonyms = [...new Set([...existingAntonyms, ...newAntonyms])];
-      existingWord.antonyms = mergedAntonyms;
-
-      if (newPhonetics && !existingWord.phonetics) {
-        existingWord.phonetics = newPhonetics;
-      }
-      if (row.Note && row.Note.trim() !== "") {
-        existingWord.note = row.Note.trim();
-      }
-      store.put(existingWord);
-
-    } else {
-
-      const wordObject = {
-        word: mainWord,
-        meanings: [...new Set(newMeanings)],
-        antonyms: [...new Set(newAntonyms)],   // ===== ANTONYMS STORED =====
-        phonetics: newPhonetics,
-        note: row.Note ? row.Note.trim() : "",
-        wrongCount: 0,
-        correctCount: 0,
-        totalAttempts: 0,
-        lastAsked: null,
-        reviewInterval: 1,
-        nextReviewDate: Date.now(),
-        batchId: batchId,
-        createdAt: new Date()
-      };
-
-      store.add(wordObject);
-      addedCount++;
-
-    }
-
-  };
-
-});
-
-
-transaction.oncomplete = function () {
-  logDebug("Excel processed. Words added: " + addedCount);
+// ===== PASSAGE FILE =====
+if (firstRow.PassageTitle && firstRow.Question) {
+  processPassages(jsonData);
 
   document.getElementById("uploadStatus").innerText =
-    "Upload successful! Words saved to database.";
+    "✅ Passage file uploaded successfully!";
 
-  loadSessionAnalytics();
-};
+  return;
+}
+
+// ===== VOCAB FILE =====
+if (firstRow.Word && firstRow.Meaning) {
+
+  const batchId = new Date().toISOString();
+  let addedCount = 0;
+
+  const transaction = db.transaction("words", "readwrite");
+  const store = transaction.objectStore("words");
+
+  jsonData.forEach(row => {
+
+    const mainWord = row.Word ? row.Word.trim() : "";
+    if (!mainWord) return;
+
+    const meanings = row.Meaning
+      ? row.Meaning.split(",").map(m => m.trim()).filter(Boolean)
+      : [];
+
+    const antonyms = row.Antonyms
+      ? row.Antonyms.split(",").map(a => a.trim()).filter(Boolean)
+      : [];
+
+    const wordObject = {
+      word: mainWord,
+      meanings: meanings,
+      antonyms: antonyms,
+      phonetics: row.Phonetics || "",
+      note: row.Note || "",
+      wrongCount: 0,
+      correctCount: 0,
+      totalAttempts: 0,
+      lastAsked: null,
+      reviewInterval: 1,
+      nextReviewDate: Date.now(),
+      batchId: batchId,
+      createdAt: new Date()
+    };
+
+    store.add(wordObject);
+    addedCount++;
+
+  });
+
+  transaction.oncomplete = function () {
+    document.getElementById("uploadStatus").innerText =
+      "✅ Vocab uploaded successfully! Words added: " + addedCount;
+
+    loadSessionAnalytics();
+  };
+
+  return;
+}
+
+// ❌ INVALID FILE
+alert("❌ Invalid Excel format! Check column names.");
 
         fileInput.value = "";
 
@@ -301,11 +347,6 @@ document.getElementById("startPractice").addEventListener("click", function () {
 });
 document.getElementById("startWeakMode").addEventListener("click", function () {
   startWeakDrill(20);
-});
-
-// Start Today's Words Practice
-document.getElementById("startTodayPractice").addEventListener("click", function () {
-  startTodayPractice();
 });
 
 // Start Exam
@@ -480,61 +521,6 @@ function startWeakDrill(totalQuestions) {
 
     // ===== ASSIGN RANDOM QUESTION TYPES =====
     currentQuestions = assignQuestionTypes(selected);
-
-    enterFocusMode();
-    renderQuestion();
-
-  });
-}
-
-// ===== TODAY'S WORDS PRACTICE =====
-function startTodayPractice() {
-
-  if (!db) {
-    alert("Database not ready.");
-    return;
-  }
-
-  getAllWords(function (words) {
-
-    // Calendar day filter: 12:00 AM to 11:59 PM today
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const todayWords = words.filter(w =>
-      new Date(w.createdAt).getTime() >= todayStart.getTime()
-    );
-
-    if (todayWords.length === 0) {
-      alert("📭 No words uploaded today!");
-      return;
-    }
-
-    if (todayWords.length < 4) {
-      alert("⚠️ Need at least 4 words for practice. Today's count: " + todayWords.length);
-      return;
-    }
-
-    allWordsGlobal = words;
-
-    // ===== BUILD MEANING MAP (full DB for distractors) =====
-    meaningToWordMap = {};
-    words.forEach(word => {
-      word.meanings.forEach(meaning => {
-        const key = meaning.toLowerCase();
-        if (!meaningToWordMap[key]) meaningToWordMap[key] = [];
-        meaningToWordMap[key].push(word.word);
-      });
-    });
-
-    examMode = false;
-    score = 0;
-    currentIndex = 0;
-    sessionResults = [];
-    quizStartTime = Date.now();
-
-    // Use all of today's words, shuffled
-    currentQuestions = assignQuestionTypes(shuffleArray(todayWords));
 
     enterFocusMode();
     renderQuestion();
@@ -1390,14 +1376,16 @@ function masterDeleteAllData() {
     return;
   }
 
-  const transaction = db.transaction(["words", "sessions"], "readwrite");
+  const transaction = db.transaction(["words", "sessions", "passages"], "readwrite");
 
   const wordsStore = transaction.objectStore("words");
   const sessionsStore = transaction.objectStore("sessions");
+  const passagesStore = transaction.objectStore("passages");
 
   wordsStore.clear();
   sessionsStore.clear();
-
+  passagesStore.clear();
+  
   transaction.oncomplete = function () {
     alert("All data deleted successfully.");
     loadSessionAnalytics();
