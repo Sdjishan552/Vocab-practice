@@ -782,3 +782,19 @@ body.book-page {
   font-size: 13px;
   color: #555;
 }
+/* ===== PASSAGE FIX ===== */
+
+.passage-text {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+/* Smooth scroll look */
+.passage-text::-webkit-scrollbar {
+  width: 4px;
+}
+.passage-text::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 10px;
+}
