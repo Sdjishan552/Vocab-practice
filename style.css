@@ -798,3 +798,137 @@ body.book-page {
   background: var(--accent);
   border-radius: 10px;
 }
+/* ===== QUICK STATS FIX ===== */
+.quick-stats-card {
+  max-width: 720px;
+  width: 92%;
+  margin: 10px auto 20px auto;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+/* ===== MODERN PASSAGE UPGRADE ===== */
+
+.passage-card {
+  background: linear-gradient(145deg, #161630, #1c1c3a);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  border-radius: 14px;
+  transition: all 0.25s ease;
+}
+
+.passage-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 25px rgba(0,0,0,0.35);
+}
+
+/* Question panel polish */
+.question-panel {
+  padding: 18px 16px 24px;
+  gap: 10px;
+}
+
+/* Option buttons modern */
+.option-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  background: #181832;
+  border: 1px solid #2f2f55;
+  border-radius: 12px;
+  color: #dcdcf5;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Tap effect */
+.option-btn:active {
+  transform: scale(0.97);
+  background: #101828;
+}
+
+.option-btn:hover {
+  transform: translateX(4px);
+}
+
+/* Smooth scroll feel */
+.passage-body {
+    padding: 16px;
+  font-size: 0.95rem;
+  line-height: 1.9;
+  color: #d6d6e8;
+  letter-spacing: 0.2px;
+  scroll-behavior: smooth;
+}
+
+/* Progress bar glow */
+.q-progress-fill {
+  box-shadow: 0 0 8px rgba(255, 26, 26, 0.6);
+}
+.upload-date {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.upload-date-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-option);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.upload-date-row label {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Box around input */
+.date-input-box {
+  background: var(--bg-card);
+  border-radius: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+}
+
+/* Actual input */
+.date-input-box input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+/* Remove ugly default style */
+.date-input-box input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+.p-header {
+  padding: 12px 16px;
+  background: #0f0f20;
+  border-bottom: 1px solid #222244;
+}
+.next-btn {
+  position: sticky;
+  bottom: 10px;
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #ff1a1a, #ff4d4d);
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+}
