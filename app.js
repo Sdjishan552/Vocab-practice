@@ -345,6 +345,7 @@ request.onsuccess = function () {
       "✅ Vocab uploaded successfully! Words added: " + addedCount;
 
     loadSessionAnalytics();
+    loadBookMode();
   }
 
 };
