@@ -40,6 +40,7 @@ function initDB() {
   document.getElementById("startPractice").disabled = true;
   document.getElementById("startExam").disabled = true;
   document.getElementById("startWeakMode").disabled = true;
+  document.getElementById("startTodayPractice").disabled = true;
   document.getElementById("uploadBtn").disabled = true;
 
 const request = indexedDB.open("VocabDB", 3);
@@ -96,6 +97,7 @@ request.onsuccess = function () {
     document.getElementById("startPractice").disabled = false;
     document.getElementById("startExam").disabled = false;
     document.getElementById("startWeakMode").disabled = false;
+    document.getElementById("startTodayPractice").disabled = false;
     document.getElementById("uploadBtn").disabled = false;
 
     // Always refresh analytics once DB is ready
@@ -301,6 +303,11 @@ document.getElementById("startWeakMode").addEventListener("click", function () {
   startWeakDrill(20);
 });
 
+// Start Today's Words Practice
+document.getElementById("startTodayPractice").addEventListener("click", function () {
+  startTodayPractice();
+});
+
 // Start Exam
 document.getElementById("startExam").addEventListener("click", function () {
 startQuiz(50, true);
@@ -473,6 +480,61 @@ function startWeakDrill(totalQuestions) {
 
     // ===== ASSIGN RANDOM QUESTION TYPES =====
     currentQuestions = assignQuestionTypes(selected);
+
+    enterFocusMode();
+    renderQuestion();
+
+  });
+}
+
+// ===== TODAY'S WORDS PRACTICE =====
+function startTodayPractice() {
+
+  if (!db) {
+    alert("Database not ready.");
+    return;
+  }
+
+  getAllWords(function (words) {
+
+    // Calendar day filter: 12:00 AM to 11:59 PM today
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayWords = words.filter(w =>
+      new Date(w.createdAt).getTime() >= todayStart.getTime()
+    );
+
+    if (todayWords.length === 0) {
+      alert("📭 No words uploaded today!");
+      return;
+    }
+
+    if (todayWords.length < 4) {
+      alert("⚠️ Need at least 4 words for practice. Today's count: " + todayWords.length);
+      return;
+    }
+
+    allWordsGlobal = words;
+
+    // ===== BUILD MEANING MAP (full DB for distractors) =====
+    meaningToWordMap = {};
+    words.forEach(word => {
+      word.meanings.forEach(meaning => {
+        const key = meaning.toLowerCase();
+        if (!meaningToWordMap[key]) meaningToWordMap[key] = [];
+        meaningToWordMap[key].push(word.word);
+      });
+    });
+
+    examMode = false;
+    score = 0;
+    currentIndex = 0;
+    sessionResults = [];
+    quizStartTime = Date.now();
+
+    // Use all of today's words, shuffled
+    currentQuestions = assignQuestionTypes(shuffleArray(todayWords));
 
     enterFocusMode();
     renderQuestion();
