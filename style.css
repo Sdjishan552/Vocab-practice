@@ -932,3 +932,7 @@ body.book-page {
   font-size: 1rem;
   font-weight: 700;
 }
+.next-btn {
+  position: sticky;
+  bottom: 10px;
+}
