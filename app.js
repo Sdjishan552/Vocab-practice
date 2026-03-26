@@ -40,6 +40,7 @@ function initDB() {
   document.getElementById("startPractice").disabled = true;
   document.getElementById("startExam").disabled = true;
   document.getElementById("startWeakMode").disabled = true;
+  document.getElementById("startTodayQuiz").disabled = true;
   document.getElementById("uploadBtn").disabled = true;
 
 const request = indexedDB.open("VocabDB", 4);
@@ -104,6 +105,7 @@ request.onsuccess = function () {
     document.getElementById("startPractice").disabled = false;
     document.getElementById("startExam").disabled = false;
     document.getElementById("startWeakMode").disabled = false;
+    document.getElementById("startTodayQuiz").disabled = false;
     document.getElementById("uploadBtn").disabled = false;
 
     // Always refresh analytics once DB is ready
@@ -408,6 +410,11 @@ document.getElementById("startWeakMode").addEventListener("click", function () {
   startWeakDrill(20);
 });
 
+// Start Today's Quiz
+document.getElementById("startTodayQuiz").addEventListener("click", function () {
+  startTodayQuiz();
+});
+
 // Start Exam
 document.getElementById("startExam").addEventListener("click", function () {
 startQuiz(50, true);
@@ -584,6 +591,54 @@ function startWeakDrill(totalQuestions) {
     enterFocusMode();
     renderQuestion();
 
+  });
+}
+
+function startTodayQuiz() {
+
+  if (!db) {
+    alert("Database not ready.");
+    return;
+  }
+
+  getAllWords(function (words) {
+
+    // Filter only words uploaded today (calendar day: 12am to now)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayWords = words.filter(w =>
+      new Date(w.createdAt).getTime() >= todayStart.getTime()
+    );
+
+    if (todayWords.length === 0) {
+      alert("📭 No words uploaded today! Upload today's Excel first.");
+      return;
+    }
+
+    allWordsGlobal = words;
+
+    // Build meaning map from all words (needed for distractor generation)
+    meaningToWordMap = {};
+    words.forEach(word => {
+      word.meanings.forEach(meaning => {
+        const key = meaning.toLowerCase();
+        if (!meaningToWordMap[key]) meaningToWordMap[key] = [];
+        meaningToWordMap[key].push(word.word);
+      });
+    });
+
+    examMode = false;
+    score = 0;
+    currentIndex = 0;
+    sessionResults = [];
+    quizStartTime = Date.now();
+
+    // Use all of today's words, shuffled
+    currentQuestions = assignQuestionTypes(shuffleArray(todayWords));
+
+    enterFocusMode();
+    renderQuestion();
   });
 }
 
