@@ -936,3 +936,234 @@ body.book-page {
   position: sticky;
   bottom: 10px;
 }
+
+/* =====================================================
+   GITHUB URL ROW
+===================================================== */
+.github-url-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+.github-url-input {
+  flex: 1;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-main);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.github-url-input::placeholder { color: var(--text-muted); }
+#githubFetchBtn {
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#githubFetchBtn:hover { background: #1e40af; }
+
+/* QR button row */
+.qr-btn-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+#showQrBtn {
+  flex: 1;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+#scanQrBtn {
+  flex: 1;
+  background: linear-gradient(135deg, #059669, #0891b2);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.upload-divider-line {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.upload-divider-line::before,
+.upload-divider-line::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+/* Export choice modal buttons */
+.export-choice-btn {
+  background: var(--bg-soft);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--text-main);
+  padding: 14px 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+.export-choice-btn:hover { border-color: var(--accent); }
+.ecb-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.ecb-desc  { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+/* =====================================================
+   SHARED QR MODAL  (used by both apps)
+===================================================== */
+.vqr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(5px);
+}
+.vqr-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+.vqr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.vqr-title { font-size: 1rem; font-weight: 800; color: var(--accent); }
+.vqr-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.vqr-close:hover { background: var(--bg-soft); color: var(--text-main); }
+.vqr-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.5;
+  padding: 14px 18px 6px;
+}
+.vqr-code-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 12px 18px;
+  background: #fff;
+  margin: 0 18px;
+  border-radius: 12px;
+}
+.vqr-url-preview {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: monospace;
+  text-align: center;
+  word-break: break-all;
+  padding: 8px 18px 14px;
+  line-height: 1.5;
+}
+/* Scanner */
+.vqr-scan-wrap {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  margin: 8px auto 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+}
+.vqr-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.vqr-corners {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.vqrc {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-style: solid;
+  border-color: #34d399;
+}
+.vqrc.tl { top:12px; left:12px;  border-width:3px 0 0 3px; border-radius:3px 0 0 0; }
+.vqrc.tr { top:12px; right:12px; border-width:3px 3px 0 0; border-radius:0 3px 0 0; }
+.vqrc.bl { bottom:12px; left:12px;  border-width:0 0 3px 3px; border-radius:0 0 0 3px; }
+.vqrc.br { bottom:12px; right:12px; border-width:0 3px 3px 0; border-radius:0 0 3px 0; }
+.vqr-line {
+  position: absolute;
+  left: 12px; right: 12px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #34d399, transparent);
+  box-shadow: 0 0 8px #34d399;
+  animation: vqrScan 2s linear infinite;
+}
+@keyframes vqrScan {
+  0%   { top: 12px; }
+  50%  { top: calc(100% - 12px); }
+  100% { top: 12px; }
+}
+.vqr-status {
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 10px 18px 4px;
+  color: #34d399;
+  min-height: 36px;
+}
+.vqr-status.err { color: #f87171; }
+.vqr-status.ok  { color: #34d399; }
+.vqr-footer {
+  border-top: 1px solid var(--border-color);
+  padding: 12px 18px 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+.vqr-cancel {
+  background: var(--bg-soft);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 8px 18px;
+  cursor: pointer;
+  font-size: 13px;
+}
