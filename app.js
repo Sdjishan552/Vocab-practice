@@ -1542,33 +1542,137 @@ function masterDeleteAllData() {
 document.getElementById("masterDeleteBtn")
   .addEventListener("click", masterDeleteAllData);
 
-// ===== EXPORT ALL DATA =====
-function exportAllData() {
+// ===== EXPORT: open choice modal =====
+function openExportModal() {
+  document.getElementById("exportModal").style.display = "flex";
+}
+function closeExportModal() {
+  document.getElementById("exportModal").style.display = "none";
+}
+
+// ===== EXPORT OPTION A: Full backup (words + stats + sessions + passages) =====
+function doExportFull() {
+  closeExportModal();
+  const tx = db.transaction(["words", "sessions", "passages"], "readonly");
+  const words    = [];
+  const sessions = [];
+  const passages = [];
+  let pending = 3;
+
+  function tryFinish() {
+    pending--;
+    if (pending > 0) return;
+    const backup = {
+      _type: "vocabpractice_full_backup",
+      _date: new Date().toISOString(),
+      words, sessions, passages
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement("a"), {
+      href: url,
+      download: "vocab_full_backup_" + new Date().toISOString().split("T")[0] + ".json"
+    });
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  tx.objectStore("words").getAll().onsuccess    = e => { words.push(...e.target.result);    tryFinish(); };
+  tx.objectStore("sessions").getAll().onsuccess = e => { sessions.push(...e.target.result); tryFinish(); };
+  tx.objectStore("passages").getAll().onsuccess = e => { passages.push(...e.target.result); tryFinish(); };
+}
+
+// ===== EXPORT OPTION B: Words only (no stats) =====
+function doExportWordsOnly() {
+  closeExportModal();
   getAllWords(function (words) {
-    if (!words || words.length === 0) {
-      alert("No data to export.");
-      return;
-    }
-
+    if (!words || words.length === 0) { alert("No words to export."); return; }
     const rows = words.map(w => ({
-      Word: w.word,
-      Meaning: (w.meanings || []).join(", "),
-      Antonyms: (w.antonyms || []).join(", "),   // ===== ANTONYMS EXPORTED =====
-      Phonetics: w.phonetics || "",
-      Note: w.note || ""
+      Word:      w.word,
+      Meaning:   (w.meanings  || []).join(", "),
+      Antonyms:  (w.antonyms  || []).join(", "),
+      Phonetics: w.phonetics  || "",
+      Note:      w.note       || ""
     }));
-
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Vocabulary");
-
-    const fileName = "vocab_export_" + new Date().toISOString().split("T")[0] + ".xlsx";
-    XLSX.writeFile(workbook, fileName);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Vocabulary");
+    XLSX.writeFile(wb, "vocab_words_" + new Date().toISOString().split("T")[0] + ".xlsx");
   });
 }
 
-document.getElementById("exportBtn")
-  .addEventListener("click", exportAllData);
+document.getElementById("exportBtn").addEventListener("click", openExportModal);
+
+// ===== IMPORT FULL BACKUP (merge, respects duplicate logic) =====
+document.getElementById("importBackupInput").addEventListener("change", function () {
+  const file = this.files[0];
+  if (!file) return;
+  this.value = "";
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    let backup;
+    try { backup = JSON.parse(e.target.result); } catch { alert("❌ Invalid JSON file."); return; }
+    if (backup._type !== "vocabpractice_full_backup") { alert("❌ Not a valid full backup file."); return; }
+    if (!confirm("Import backup?\nWords will be merged (duplicates skipped). Sessions & passages will be added.")) return;
+
+    // --- Merge words (same duplicate logic as upload: unique word index) ---
+    const tx = db.transaction("words", "readwrite");
+    const store = tx.objectStore("words");
+    let imported = 0, skipped = 0;
+    const incoming = backup.words || [];
+
+    function importNextWord(i) {
+      if (i >= incoming.length) {
+        // After words done, import sessions and passages
+        importSessions(backup.sessions || []);
+        importPassages(backup.passages || []);
+        document.getElementById("uploadStatus").innerText =
+          "✅ Import done — " + imported + " words merged, " + skipped + " duplicates skipped.";
+        loadSessionAnalytics();
+        return;
+      }
+      const w = incoming[i];
+      if (!w.word) { skipped++; importNextWord(i + 1); return; }
+      const idx = store.index("word");
+      const req = idx.get(w.word.trim().toLowerCase());
+      req.onsuccess = function () {
+        const existing = req.result;
+        if (existing) {
+          // Merge meanings and antonyms, keep stats (existing wins)
+          existing.meanings  = [...new Set([...(existing.meanings||[]), ...(w.meanings||[])])];
+          existing.antonyms  = [...new Set([...(existing.antonyms||[]), ...(w.antonyms||[])])];
+          if (!existing.phonetics && w.phonetics) existing.phonetics = w.phonetics;
+          if (!existing.note      && w.note)      existing.note      = w.note;
+          store.put(existing);
+          skipped++;
+        } else {
+          // Strip id so IndexedDB auto-assigns a new one (avoids key conflicts)
+          const copy = Object.assign({}, w);
+          delete copy.id;
+          store.add(copy);
+          imported++;
+        }
+        importNextWord(i + 1);
+      };
+    }
+    importNextWord(0);
+
+    function importSessions(sessions) {
+      if (!sessions.length) return;
+      const stx = db.transaction("sessions", "readwrite");
+      const ss  = stx.objectStore("sessions");
+      sessions.forEach(s => { const c = Object.assign({}, s); delete c.id; ss.add(c); });
+    }
+    function importPassages(passages) {
+      if (!passages.length) return;
+      const ptx = db.transaction("passages", "readwrite");
+      const ps  = ptx.objectStore("passages");
+      passages.forEach(p => { const c = Object.assign({}, p); delete c.id; ps.add(c); });
+    }
+
+    showSection("upload");
+  };
+  reader.readAsText(file);
+});
 
 // ===== THEME SYSTEM =====
 
@@ -1652,5 +1756,261 @@ function editNote(wordId) {
 
   };
 }
+
+// ═══════════════════════════════════════════════════════
+// GITHUB FETCH  (Practice Engine)
+// ═══════════════════════════════════════════════════════
+function convertToRawUrl(url) {
+  url = url.trim();
+  if (url.includes("raw.githubusercontent.com")) return url;
+  const m = url.match(/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)/);
+  if (m) return "https://raw.githubusercontent.com/" + m[1] + "/" + m[2] + "/" + m[3];
+  return url;
+}
+
+function vpeSetStatus(msg) {
+  document.getElementById("uploadStatus").innerText = msg;
+}
+
+async function vpeFetchAndProcess(rawUrl) {
+  const url = convertToRawUrl(rawUrl);
+  vpeSetStatus("⏳ Fetching from GitHub…");
+  let arrayBuf;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    arrayBuf = await res.arrayBuffer();
+  } catch (err) {
+    vpeSetStatus("❌ Fetch failed: " + err.message + ". Make sure the repo is public and URL points to a raw .xlsx file.");
+    return;
+  }
+
+  // Parse Excel — same logic as the file upload handler
+  let jsonData;
+  try {
+    const data = new Uint8Array(arrayBuf);
+    const wb   = XLSX.read(data, { type: "array" });
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    jsonData   = XLSX.utils.sheet_to_json(ws);
+  } catch (err) {
+    vpeSetStatus("❌ Could not parse Excel: " + err.message);
+    return;
+  }
+
+  if (!jsonData.length) { vpeSetStatus("❌ Excel file is empty or invalid format."); return; }
+
+  // Need a date — use today if none selected
+  const dateInput = document.getElementById("uploadDateInput").value;
+  let selectedDate;
+  if (dateInput) {
+    const [y, mo, d] = dateInput.split("-").map(Number);
+    selectedDate = new Date(y, mo - 1, d);
+  } else {
+    selectedDate = new Date();
+    selectedDate.setHours(0, 0, 0, 0);
+  }
+
+  const firstRow = jsonData[0];
+
+  // Passage file
+  if (firstRow.PassageTitle && firstRow.Question) {
+    processPassages(jsonData, selectedDate);
+    vpeSetStatus("✅ Passage data fetched from GitHub and saved!");
+    loadSessionAnalytics();
+    return;
+  }
+
+  // Vocab file
+  if (firstRow.Word && firstRow.Meaning) {
+    const batchId = new Date().toISOString();
+    let addedCount = 0;
+    let pending    = jsonData.length;
+    const transaction = db.transaction("words", "readwrite");
+    const store       = transaction.objectStore("words");
+
+    jsonData.forEach(row => {
+      const mainWord = row.Word ? row.Word.trim().toLowerCase() : "";
+      if (!mainWord) { pending--; if (pending === 0) vpeSetStatus("✅ Done (0 words)"); return; }
+
+      const meanings = row.Meaning
+        ? row.Meaning.split(",").map(m => m.trim().toLowerCase()).filter(Boolean) : [];
+      const antonyms = row.Antonyms
+        ? row.Antonyms.split(",").map(a => a.trim().toLowerCase()).filter(Boolean) : [];
+
+      const wordObject = {
+        word: mainWord, meanings, antonyms,
+        phonetics: row.Phonetics || "", note: row.Note || "",
+        wrongCount: 0, correctCount: 0, totalAttempts: 0,
+        lastAsked: null, reviewInterval: 1,
+        nextReviewDate: selectedDate.getTime(),
+        batchId, createdAt: selectedDate
+      };
+
+      const req = store.index("word").get(mainWord);
+      req.onsuccess = function () {
+        const existing = req.result;
+        if (existing) {
+          existing.meanings = [...new Set([...(existing.meanings||[]), ...meanings])];
+          existing.antonyms = [...new Set([...(existing.antonyms||[]), ...antonyms])];
+          if (!existing.phonetics && row.Phonetics) existing.phonetics = row.Phonetics;
+          if (!existing.note      && row.Note)      existing.note      = row.Note;
+          store.put(existing);
+        } else {
+          store.add(wordObject);
+          addedCount++;
+        }
+        pending--;
+        if (pending === 0) {
+          vpeSetStatus("✅ Fetched from GitHub! " + addedCount + " new words added.");
+          loadSessionAnalytics();
+        }
+      };
+    });
+    return;
+  }
+
+  vpeSetStatus("❌ Invalid Excel format! Check column names (Word, Meaning required).");
+}
+
+document.getElementById("githubFetchBtn").addEventListener("click", function () {
+  const url = document.getElementById("githubUrlInput").value.trim();
+  if (!url) { vpeSetStatus("⚠️ Paste a GitHub URL first."); return; }
+  if (!db)  { vpeSetStatus("⚠️ Database not ready yet."); return; }
+  vpeFetchAndProcess(url);
+});
+
+// ═══════════════════════════════════════════════════════
+// QR SHARE ENGINE  (Practice Engine)
+// ═══════════════════════════════════════════════════════
+let _vpeQrStream   = null;
+let _vpeQrInterval = null;
+let _vpeQrFound    = false;
+
+function openVQR(mode) {
+  const modal     = document.getElementById("qrModal");
+  const showPanel = document.getElementById("vqrShowPanel");
+  const scanPanel = document.getElementById("vqrScanPanel");
+  showPanel.style.display = mode === "show" ? "" : "none";
+  scanPanel.style.display = mode === "scan" ? "" : "none";
+  modal.style.display = "flex";
+
+  if (mode === "show") {
+    const url = document.getElementById("githubUrlInput").value.trim();
+    if (!url) { closeVQR(); vpeSetStatus("⚠️ Paste a GitHub URL first, then press Show QR."); return; }
+    const box = document.getElementById("vqrCodeBox");
+    box.innerHTML = "";
+    try {
+      /* global qrcode */
+      const qr = qrcode(0, "M");
+      qr.addData(url);
+      qr.make();
+      box.innerHTML = qr.createTableTag(5, 0);
+      const t = box.querySelector("table");
+      if (t) { t.style.border = "none"; t.style.borderCollapse = "collapse"; }
+    } catch(e) {
+      box.innerHTML = "<div style='color:red;font-size:12px;padding:10px'>⚠️ URL too long for QR</div>";
+    }
+    document.getElementById("vqrUrlPreview").textContent = url;
+  }
+
+  if (mode === "scan") {
+    _vpeQrFound = false;
+    vpeQrSetStatus("📷 Starting camera…", "");
+    vpeStartCamera();
+  }
+}
+
+window.closeVQR = function () {
+  vpeStopCamera();
+  document.getElementById("qrModal").style.display = "none";
+  document.getElementById("vqrCodeBox").innerHTML = "";
+};
+
+document.getElementById("showQrBtn").addEventListener("click", () => openVQR("show"));
+document.getElementById("scanQrBtn").addEventListener("click", () => openVQR("scan"));
+document.getElementById("qrModal").addEventListener("click", function (e) {
+  if (e.target === this) closeVQR();
+});
+
+function vpeQrSetStatus(msg, cls) {
+  const el = document.getElementById("vqrStatus");
+  if (!el) return;
+  el.textContent  = msg;
+  el.className    = "vqr-status" + (cls ? " " + cls : "");
+}
+
+function vpeStartCamera() {
+  /* global jsQR */
+  if (typeof jsQR === "undefined") { vpeQrSetStatus("⚠️ jsQR not loaded — refresh page.", "err"); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    vpeQrSetStatus("⚠️ Camera not supported on this browser.", "err"); return;
+  }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
+    .then(function (stream) {
+      _vpeQrStream = stream;
+      const video = document.getElementById("vqrVideo");
+      video.srcObject = stream;
+      video.onloadedmetadata = function () {
+        video.play().then(function () {
+          vpeQrSetStatus("📷 Scanning… point at the QR code", "");
+          if (_vpeQrInterval) clearInterval(_vpeQrInterval);
+          _vpeQrInterval = setInterval(vpeScanFrame, 100);
+        }).catch(e => vpeQrSetStatus("⚠️ Video error: " + e.message, "err"));
+      };
+    })
+    .catch(function (err) {
+      const msgs = { NotAllowedError: "Camera permission denied.", NotFoundError: "No camera found.", NotReadableError: "Camera in use by another app." };
+      vpeQrSetStatus("⚠️ " + (msgs[err.name] || err.message), "err");
+    });
+}
+
+function vpeScanFrame() {
+  if (_vpeQrFound) return;
+  const modal = document.getElementById("qrModal");
+  if (!modal || modal.style.display === "none") { vpeStopCamera(); return; }
+  const video = document.getElementById("vqrVideo");
+  if (!video || video.readyState < 2) return;
+  const W = video.videoWidth, H = video.videoHeight;
+  if (!W || !H) return;
+  const canvas = document.getElementById("vqrCanvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, W, H);
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const code = jsQR(imgData.data, W, H, { inversionAttempts: "attemptBoth" });
+  if (code && code.data) {
+    _vpeQrFound = true;
+    vpeQrSetStatus("✅ QR detected!", "ok");
+    vpeStopCamera();
+    setTimeout(() => vpeHandleScannedUrl(code.data), 300);
+  }
+}
+
+function vpeStopCamera() {
+  if (_vpeQrInterval) { clearInterval(_vpeQrInterval); _vpeQrInterval = null; }
+  if (_vpeQrStream)   { _vpeQrStream.getTracks().forEach(t => t.stop()); _vpeQrStream = null; }
+  const v = document.getElementById("vqrVideo");
+  if (v) { v.onloadedmetadata = null; v.srcObject = null; }
+}
+
+function vpeHandleScannedUrl(scannedUrl) {
+  const url = (scannedUrl || "").trim();
+  if (!url.startsWith("http")) {
+    _vpeQrFound = false;
+    vpeQrSetStatus("⚠️ Not a valid URL. Try again.", "err");
+    setTimeout(() => { vpeQrSetStatus("📷 Scanning…", ""); _vpeQrFound = false; vpeStartCamera(); }, 2000);
+    return;
+  }
+  closeVQR();
+  document.getElementById("githubUrlInput").value = url;
+  if (!db) { vpeSetStatus("⚠️ Database not ready. Try Fetch manually."); return; }
+  vpeFetchAndProcess(url);
+}
+
+// expose for modal onclick attributes
+window.closeExportModal = closeExportModal;
+window.openExportModal  = openExportModal;
+window.doExportFull     = doExportFull;
+window.doExportWordsOnly = doExportWordsOnly;
 
 });
