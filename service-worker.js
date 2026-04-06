@@ -1,4 +1,4 @@
-const CACHE_NAME = "vocab-app-IB";
+const CACHE_NAME = "vocab-app-IB16";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
