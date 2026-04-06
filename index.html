@@ -51,15 +51,26 @@
     <input type="date" id="uploadDateInput" required />
   </div>
 </div>
+    <!-- GitHub URL row -->
+    <div class="github-url-row">
+      <input type="url" id="githubUrlInput" class="github-url-input"
+        placeholder="Paste raw GitHub Excel URL…"
+        autocomplete="off" spellcheck="false" />
+      <button type="button" id="githubFetchBtn">⬇ Fetch</button>
+    </div>
+
+    <!-- QR share buttons -->
+    <div class="qr-btn-row">
+      <button type="button" id="showQrBtn">📲 Show QR</button>
+      <button type="button" id="scanQrBtn">📷 Scan QR</button>
+    </div>
+
+    <div class="upload-divider-line"><span>or upload local file</span></div>
+
     <input type="file" id="excelFile" accept=".xlsx,.xls" hidden />
-
-    <button type="button" id="customFileBtn">
-      📁 Select Excel File
-    </button>
-
+    <button type="button" id="customFileBtn">📁 Select Excel File</button>
     <span id="fileName">No file selected</span>
-
-<button type="button" id="uploadBtn">🚀 Upload & Save</button>
+    <button type="button" id="uploadBtn">🚀 Upload & Save</button>
   </div>
 
   <div id="uploadStatus"></div>
@@ -109,8 +120,12 @@
 
   <div style="margin-top:30px; text-align:center; display:flex; gap:15px; justify-content:center; flex-wrap:wrap;">
     <button id="exportBtn" class="export-btn">
-      📤 Export All Data
+      📤 Export Data
     </button>
+    <label class="export-btn" style="cursor:pointer;">
+      📥 Import Backup
+      <input type="file" id="importBackupInput" accept=".json" hidden />
+    </label>
     <button id="masterDeleteBtn" class="danger-btn">
       🔥 Master Delete All Data
     </button>
@@ -122,7 +137,68 @@
   <div id="focusContent"></div>
 </div>
 
+<!-- ================= QR MODAL ================= -->
+<div id="qrModal" class="vqr-overlay" style="display:none">
+  <div class="vqr-box">
+    <div class="vqr-header">
+      <span class="vqr-title" id="qrModalTitle">📲 QR Share</span>
+      <button class="vqr-close" onclick="closeVQR()">✕</button>
+    </div>
+
+    <!-- Show QR panel -->
+    <div id="vqrShowPanel">
+      <p class="vqr-hint">Scan this QR from the other device to fetch the same Excel file.</p>
+      <div class="vqr-code-wrap" id="vqrCodeBox"></div>
+      <div class="vqr-url-preview" id="vqrUrlPreview"></div>
+    </div>
+
+    <!-- Scan QR panel -->
+    <div id="vqrScanPanel" style="display:none">
+      <p class="vqr-hint">Point camera at the QR code on the other screen.</p>
+      <div class="vqr-scan-wrap">
+        <video id="vqrVideo" class="vqr-video" autoplay playsinline muted></video>
+        <canvas id="vqrCanvas" style="display:none"></canvas>
+        <div class="vqr-corners">
+          <span class="vqrc tl"></span><span class="vqrc tr"></span>
+          <span class="vqrc bl"></span><span class="vqrc br"></span>
+          <span class="vqr-line"></span>
+        </div>
+      </div>
+      <div class="vqr-status" id="vqrStatus">📷 Starting camera…</div>
+    </div>
+
+    <div class="vqr-footer">
+      <button class="vqr-cancel" onclick="closeVQR()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EXPORT CHOICE MODAL ================= -->
+<div id="exportModal" class="vqr-overlay" style="display:none">
+  <div class="vqr-box" style="max-width:360px">
+    <div class="vqr-header">
+      <span class="vqr-title">📤 Export Data</span>
+      <button class="vqr-close" onclick="closeExportModal()">✕</button>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:12px">
+      <button class="export-choice-btn" onclick="doExportFull()">
+        <div class="ecb-title">💾 Full Backup</div>
+        <div class="ecb-desc">Words + all stats + sessions + passages. Restores everything.</div>
+      </button>
+      <button class="export-choice-btn" onclick="doExportWordsOnly()">
+        <div class="ecb-title">📚 Words Only</div>
+        <div class="ecb-desc">Just the vocabulary (Word, Meaning, Antonyms, Phonetics, Note). No stats.</div>
+      </button>
+    </div>
+    <div class="vqr-footer">
+      <button class="vqr-cancel" onclick="closeExportModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- ================= MAIN SCRIPT ================= -->
+<script src="qrcode-gen.js"></script>
+<script src="jsQR.js"></script>
 <script src="app.js"></script>
 
 <!-- ================= SERVICE WORKER ================= -->
@@ -130,12 +206,8 @@
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("service-worker.js")
-      .then(reg => {
-        console.log("Service Worker registered. Scope:", reg.scope);
-      })
-      .catch(err => {
-        console.error("Service Worker registration failed:", err);
-      });
+      .then(reg => console.log("SW registered:", reg.scope))
+      .catch(err => console.error("SW failed:", err));
   });
 }
 </script>
