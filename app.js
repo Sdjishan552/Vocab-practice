@@ -1778,10 +1778,10 @@ async function vpeFetchAndProcess(rawUrl) {
   let arrayBuf;
   try {
     const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (!res.ok) throw new Error("HTTP " + res.status + " — URL tried: " + url);
     arrayBuf = await res.arrayBuffer();
   } catch (err) {
-    vpeSetStatus("❌ Fetch failed: " + err.message + ". Make sure the repo is public and URL points to a raw .xlsx file.");
+    vpeSetStatus("❌ " + err.message);
     return;
   }
 
